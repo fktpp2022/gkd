@@ -108,7 +108,7 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 
 ### 4.2 Floating rule button
 
-- A dedicated overlay button, **off by default**, enabled in GKD settings with a short explanation (A0).
+- A dedicated overlay button, **off by default**, enabled in GKD settings next to the existing floating snapshot setting, with a short explanation (A0).
 - Requires the accessibility service and the overlay permission. Enabling the switch walks the user through whatever is missing; the switch does not turn on until both are available.
 - Tap hides all GKD overlays, captures the foreground app's active window, and opens the authoring page. One tap, no confirmation.
 - If capture fails, the page stays in GKD with a plain-language retry/dead-end state (A9); it never pretends to have a screen.
