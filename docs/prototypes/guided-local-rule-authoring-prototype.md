@@ -154,7 +154,7 @@ The page opens on the frozen screenshot immediately. Nodes may still be loading.
 │  ✓ 1 element matches on this screen  │
 │                                      │
 │  ▸ Options                           │
-│    [✓] Tap once when the app opens   │
+│    [ ] Only act right after app open │
 │                                      │
 │  ┌────────────────────────────────┐  │
 │  │            Save                │  │
@@ -168,7 +168,7 @@ The page opens on the frozen screenshot immediately. Nodes may still be loading.
   `Inside “Registration dialog” ×` or `Next to “Close” ×`.
 - The thumbnail expands to the full frozen screen on tap. All matches are highlighted; the picked node has a distinct ring.
 - Count copy is a pluralized Compose resource and always says "on this screen".
-- **Options** is collapsed. It contains "Tap once when the app opens" (the limits bundle), on by default, and the rule name (auto-suggested, editable).
+- **Options** is collapsed. It contains "Only act right after the app opens" (the limits bundle), off by default, with the helper "Stops 10 seconds after the app opens, or after one tap," and the rule name (auto-suggested, editable).
 - The top-right overflow contains **Edit as JSON** (S11) only for users who open it; it is not part of the basic path.
 - **Save** behavior:
   - 1 match → save pipeline (duplicate check first).
@@ -407,6 +407,7 @@ Abandon without edits returns directly and deletes the transient capture. An aba
 | Existing advanced | This rule uses advanced settings the guided editor can't show. | Explains the JSON fallback |
 | Duplicate | An identical rule already exists in “<name>”. | Canonical equality |
 | Zero match | Nothing on this screen matches yet. The element may not be showing now. | Allows future screens |
+| Limits option | Only act right after the app opens | Off by default; helper: Stops 10 seconds after the app opens, or after one tap. |
 | Dead end | GKD couldn't read this screen's elements. | Honest; no blame |
 | Save | Save | One word |
 | Saved | Rule saved. | No claim of verification |
