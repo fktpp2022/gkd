@@ -1,8 +1,8 @@
 # Guided local-rule authoring on Android — UX spec
 
-**Status:** decision-locked, October 2026. This is the destination artifact of the wayfinder map [#1](https://github.com/fktpp2022/gkd/issues/1). It specifies behaviour, not implementation.
+**Status:** decision-locked, October 2026. This is the destination artifact of the wayfinder map [#1](https://github.com/fktpp2022/gkd/issues/1). It specifies behaviour, not implementation. **Amended October 2026** with the recording-v1 addendum from the [recording effort](https://github.com/fktpp2022/gkd/issues/11) and ticket [#19](https://github.com/fktpp2022/gkd/issues/19). The amendment is additive; section 19 records exactly which sections changed and why.
 
-**Sources:** selector strategy [#2](https://github.com/fktpp2022/gkd/issues/2), capture choreography [#3](https://github.com/fktpp2022/gkd/issues/3), existing-rule detection [#4](https://github.com/fktpp2022/gkd/issues/4), condition model [#5](https://github.com/fktpp2022/gkd/issues/5), interaction prototype [#6](https://github.com/fktpp2022/gkd/issues/6), MVP cut [#7](https://github.com/fktpp2022/gkd/issues/7), and the research reports under `docs/research/` (on their research branches).
+**Sources:** selector strategy [#2](https://github.com/fktpp2022/gkd/issues/2), capture choreography [#3](https://github.com/fktpp2022/gkd/issues/3), existing-rule detection [#4](https://github.com/fktpp2022/gkd/issues/4), condition model [#5](https://github.com/fktpp2022/gkd/issues/5), interaction prototype [#6](https://github.com/fktpp2022/gkd/issues/6), MVP cut [#7](https://github.com/fktpp2022/gkd/issues/7), and the research reports under `docs/research/` (on their research branches). Recording sources: platform semantics [#12](https://github.com/fktpp2022/gkd/issues/12), prior art [#13](https://github.com/fktpp2022/gkd/issues/13), device evidence [#14](https://github.com/fktpp2022/gkd/issues/14), vocabulary [#15](https://github.com/fktpp2022/gkd/issues/15), what a demonstration must yield [#16](https://github.com/fktpp2022/gkd/issues/16), choreography [#17](https://github.com/fktpp2022/gkd/issues/17), go/no-go and the MVP cut [#18](https://github.com/fktpp2022/gkd/issues/18), and non-native observation [#20](https://github.com/fktpp2022/gkd/issues/20).
 
 **Companion artifact:** [paper prototype](../prototypes/guided-local-rule-authoring-prototype.md). The prototype shows screen order and wording; this spec is authoritative where the two differ.
 
@@ -43,6 +43,8 @@ The saved rule uses the existing local subscription, the existing selector engin
 - The local subscription (`SubscriptionIds.LOCAL = -2`) and app-scoped rules only.
 - Actions: tap and long-press.
 - Sessions from a live capture, a stored snapshot, or the app page (latest snapshot or manual editor).
+- Recording phases in a live-capture session: one demonstrated tap or long-press becomes the picked node and the existing authoring flow continues (sections 5.4 and 8.8). A failed attempt may be retried as a new recording session against the same capture, except when the screen changed (section 6.20).
+- Recording observes taps only where the app reports accessibility click events — native Views and WebView. Compose and custom-drawn taps remain an honest dead end (section 8.9).
 - Structured conditions, one context, live match preview, broad/narrow, zero-match save, duplicate check, existing-rule detection, guided re-edit for representable rules, raw JSON fallback.
 - The limits option ("Only act right after the app opens"), off by default.
 
@@ -54,6 +56,13 @@ The saved rule uses the existing local subscription, the existing selector engin
 - Rule management: a guided rule list, detail page, delete, rename, or a guided badge outside re-capture.
 - Creating global-group rules (detection of existing local global groups is in scope); remote-subscription detection; subscription authoring or sharing.
 - Coordinate fallback; simulated action/automator self-test; "why not matched" inspection beyond the count.
+- Multi-action or multi-rule recording, sequences, replay, and script/macro semantics.
+- Actions other than tap and long-press while recording.
+- Recording from the app page, a stored snapshot, or Desktop.
+- Observing Compose or custom-drawn taps through privileged input, touch exploration, or tree-diff; v1 uses the accessibility click event only.
+- Feeding demonstrations to automatic or LLM rule generation.
+- A provenance field, badge, toast, or any rule-level difference marking a rule as recorded; a separate Record setting.
+- Recording as an accessibility path; the list pick remains the non-visual route.
 - Schema, selector-language, or database changes.
 - Desktop as a product authoring surface.
 
@@ -73,7 +82,7 @@ The saved rule uses the existing local subscription, the existing selector engin
 | --- | --- |
 | **Authoring capture** | The transient screenshot + node tree taken for one authoring session. Never added to the snapshot gallery; deleted on save, abandon, or session teardown. |
 | **Authoring group** | The per-app local group with the reserved localized name ("My rules" in English). Found by exact name or created on first save. |
-| **Picked node** | The node under the user's tap. |
+| **Picked node** | The node the user designates as the rule's target — by tapping it on the authoring capture, or by performing the action on it in the live app during recording. How it was designated is a session-level fact, never a rule-level one. |
 | **Target element / actable node** | The node the rule acts on: the picked node, or the nearest clickable ancestor when the picked node is not clickable and has no usable text/description. |
 | **Condition row** | One AND-ed predicate over `text`, `desc`, `vid`, `id`, class, `clickable`, or `visibleToUser`. |
 | **Context** | One relation to a second picked node: Inside or Next to. |
@@ -82,10 +91,15 @@ The saved rule uses the existing local subscription, the existing selector engin
 | **Guided-representable rule** | A rule wholly inside the guided subset (section 8.7). Only these open in the guided editor. |
 | **Broad** | A selector that matches more than one node on the captured screen. Not a persisted mode. |
 | **Limits option** | The single "Only act right after the app opens" toggle that writes three timing fields (section 9.5). |
+| **Recording session** | A phase of a live-capture authoring session in which GKD watches the captured app for one tap or long-press, rule engine idle. It ends at the first click/long-click event from the captured app, a screen change that invalidates the capture, Stop, or session end. An authoring session holds at most one demonstration but may run several recording sessions after failed attempts. |
+| **Demonstration** | One user-performed tap or long-press during a recording session, from which the picked node is derived. A tap that yields no node of the authoring capture is not a demonstration. At most one per authoring session; never persisted. |
+| **Recorded rule** | Not a kind of rule. Informal shorthand only for "a rule whose authoring session included a demonstration"; nothing distinguishes it after saving. |
 
 ### 3.2 UI vocabulary budget
 
 Allowed on the golden path: element, screen, app, rule, tap, long-press, Inside, Next to.
+
+The recording path adds **Record / Recording** for the icon and the live chip, **Stop** for its only control, and the status line "GKD rules are paused". It introduces no new rule vocabulary; success adds no copy at all.
 
 Hidden until the advanced editor: selector, node, activity, activity id, group key, match time, action maximum, reset match, fast query, JSON5, subscription, package name, ancestor, sibling, index, `@`, `>`, `+`, `-`.
 
@@ -97,18 +111,21 @@ Hidden until the advanced editor: selector, node, activity, activity id, group k
 
 ### 4.1 Entry matrix
 
-| Entry | Platform | Screen data | Session opens | On save/abandon |
-| --- | --- | --- | --- | --- |
-| Floating rule button | Android | Live capture of the foreground window | Authoring page over the frozen screenshot | Return to the target app |
-| GKD app page → Create rule | Android + Desktop replay | Latest stored snapshot for that app; if none, the manual condition editor | Authoring page or manual editor | Return to the app page |
-| Stored snapshot → Create rule | Android + Desktop replay | That snapshot | Authoring page | Return to the snapshot detail |
-| Desktop fixture replay | Desktop | Fixture snapshot | Authoring page | Return to the replay page |
+| Entry | Platform | Screen data | Record offered | Session opens | On save/abandon |
+| --- | --- | --- | --- | --- | --- |
+| Floating rule button | Android | Live capture of the foreground window | Yes, after the picker has usable nodes | Authoring page over the frozen screenshot; a recording phase brings the live app forward | Return to the target app |
+| GKD app page → Create rule | Android + Desktop replay | Latest stored snapshot for that app; if none, the manual condition editor | No — no guaranteed live foreground app | Authoring page or manual editor | Return to the app page |
+| Stored snapshot → Create rule | Android + Desktop replay | That snapshot | No — no guaranteed live foreground app | Authoring page | Return to the snapshot detail |
+| Desktop fixture replay | Desktop | Fixture snapshot | No — no live app | Authoring page | Return to the replay page |
 
-No Quick Settings tile, notification action, share target, launcher shortcut, or "arm for the next screen" state. The existing snapshot button keeps its current behaviour.
+Record is offered only in a session with a guaranteed live foreground app: the floating rule button. It never appears in the app-page, stored-snapshot, or Desktop sessions, in the A9 dead end, or on A3 and later. It is hidden for the rest of the authoring session after a demonstration succeeds and returns after a failed attempt (sections 5.4 and 6.18).
+
+No Quick Settings tile, notification action, share target, launcher shortcut, or "arm for the next screen" state. Recording is a live phase, not an armed state: it watches only while the chip is visible, and Stop ends it. The existing snapshot button keeps its current behaviour.
 
 ### 4.2 Floating rule button
 
 - A dedicated overlay button, **off by default**, enabled in GKD settings next to the existing floating snapshot setting, with a short explanation (A0).
+- This is the only entry that offers recording (section 5.4). There is no separate Record setting; the Record icon lives in the live-capture picker and is offered only after the picker has usable nodes.
 - Requires the accessibility service and the overlay permission. Enabling the switch walks the user through whatever is missing; the switch does not turn on until both are available.
 - Tap hides all GKD overlays, captures the foreground app's active window, and opens the authoring page. One tap, no confirmation.
 - If capture fails, the page stays in GKD with a plain-language retry/dead-end state (A9); it never pretends to have a screen.
@@ -147,6 +164,7 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 ### 5.2 Back stack and return
 
 - Floating entry: the authoring task closes on save/abandon and the target app resumes.
+- During a recording phase the authoring page stays in the back stack and the captured app comes forward; the first event from the captured app, Stop, or an invalidating screen change brings the authoring page back automatically. Back and Home in the live app are ordinary app actions and do not end the phase.
 - GKD entry: returns to the originating page with its scroll state.
 - Editing an existing rule pushes the edit state inside the session; Back returns to the new-rule draft unchanged, with no discard prompt.
 - Opening the raw editor hands off to the existing group editor; Back returns to the guided draft.
@@ -157,6 +175,18 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 - The rule is active immediately; no "try it now" step. With the limits option off, it may fire before the user returns if the target is still visible; with the option on, it waits for the next app opening.
 - **Save failure** keeps the draft and the current screen; shows an inline retryable message. No navigation, no data loss.
 - **Discard** shows a confirmation only when the draft has changes. A draft has changes when the user modified the selection-derived prefill (conditions, action, context, name, or limits); returning immediately after a pick counts as no changes and closes directly. The confirmation is the only modal on the abandon path.
+- A demonstration adds no save path. The same save, duplicate, failure, and discard rules apply; the only difference is that the action row arrives prefilled (section 6.6).
+
+### 5.4 Recording phase (live capture only)
+
+- Available only in a live-capture session, from A2, after the picker has a usable tree, and only while no demonstration has succeeded in this authoring session. Entering it starts immediately; there is no confirmation sheet and no separate setting.
+- The authoring page stays in the back stack; the captured app comes forward. Recording starts **no new capture** — the authoring capture from entry remains the only reference for target resolution, uniqueness, and preview. The floating rule button is hidden while recording; the chip is the only GKD surface.
+- The rule engine is idle for the entire phase, globally: no rule acts on any app while recording. This is load-bearing, not cosmetic. On Android 8–11 the service receives no action discriminator, so engine idle is the only separator between GKD's own clicks and the user's tap. An action already in flight when the phase starts is guarded so it cannot be recorded as the demonstration. The engine resumes when the phase ends.
+- The phase ends at the first click or long-click event from the captured app, usable or not; at **Stop**; or at a screen change that invalidates the capture (A17). There is no timer; silence waits indefinitely.
+- Events from other apps are ignored: they neither end nor consume the attempt. The chip remains visible, so the global pause stays stated and Stop stays one tap away. Leaving the captured app does not end the phase; the user returns to the captured app to demonstrate, or taps Stop.
+- A failed attempt may be retried against the same capture as a new recording session; A17 is the exception, offering recapture or picking on the old capture. A failed attempt is not a demonstration. A successful demonstration spends the one-demonstration budget: the Record icon stays hidden for the rest of the authoring session, including after returning to A2. Picking on the capture remains available and is not a demonstration.
+- A post-tap screen change is the demonstration's result, not an invalidation. A pre-tap window change in the captured app invalidates the attempt (A17). A failed tap whose own navigation changed the screen is also A17.
+- Recording observes accessibility click events only. Native Views and WebView pass this path; Compose and custom-drawn user taps emit no event and reach A16 honestly (section 8.9). No privileged input, touch exploration, or tree-diff observation is part of v1.
 
 ---
 
@@ -168,7 +198,7 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 | --- | --- | --- | --- |
 | A0 Enable button | GKD settings | Turn on / Not now | Settings |
 | A1 Capture | Entry | Wait for screenshot + nodes | A2 Pick, A9 Dead end |
-| A2 Pick | A1 | Tap a node | A2b Overlap, A3 Conditions |
+| A2 Pick | A1 | Tap a node; Record (live capture only) | A2b Overlap, A3 Conditions, A15 Recording |
 | A2b Overlap | >1 node at the point | Choose candidate / Cancel | A3 Conditions |
 | A3 Conditions | Pick, edit, context | Edit rows, action, options; Save | A4 Broad, A5 Context, A6 Banner (inline), A8 Zero (inline), A12 Save |
 | A4 Broad | Save with N > 1 | Narrow it / Keep it broad / Cancel | A5, A7 Duplicate, A3 |
@@ -182,8 +212,11 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 | A12 Save result | Confirmed save | Return | Origin |
 | A13 Save error | Write failure | Retry | A12, A3 |
 | A14 Manual editor | No snapshot, dead end | Add rows; Save | A12, A11 |
+| A15 Recording | A2 Record, live capture only | Tap/long-press the target in the captured app; Stop | A3 Conditions, A16 Nothing recorded, A17 Screen changed |
+| A16 Nothing recorded | Stop with no event; an event that identifies no capture node | Pick it instead / Record again / Cancel | A2 Pick, A15 Recording, session end |
+| A17 Screen changed | Pre-tap screen change in the captured app; failed tap whose navigation changed the screen | Capture this screen and record again / Pick on the captured screen / Cancel | A15 Recording with a new capture, A2 Pick, session end |
 
-A6 and A8 are inline states on A3, not separate pages.
+A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recording amendment and correspond to S13–S15 in the paper prototype; A16 and A17 are inline states on A2, not separate pages. A15 is a phase in which the live app is in front, not a page over the screenshot.
 
 ### 6.2 A0 — First-run enable sheet
 
@@ -207,6 +240,7 @@ A6 and A8 are inline states on A3, not separate pages.
 - Actions: **Use this**, **Choose again**.
 - If the picked node is not clickable and has no usable text/description, the actable node is the nearest clickable ancestor; this is stated, not hidden.
 - Accessibility alternative: **Choose from a list** lists labeled nodes in screen order with their indent; selecting one behaves like a pick. If the list is empty, route to A14.
+- In a live-capture session, A2 also offers **Record**: a single top-bar icon (a record dot), accessible name "Record a tap". It appears only after the picker has usable nodes, is absent from A9 and from A3 onward, and starts A15 immediately with no confirmation sheet. It is hidden for the rest of the authoring session after a demonstration succeeds and returns after a failed attempt. Picking remains the primary path.
 - More than one candidate at the point: A2b.
 
 ### 6.5 A2b — Which element?
@@ -221,6 +255,7 @@ A6 and A8 are inline states on A3, not separate pages.
 - Preview: screenshot thumbnail with every match highlighted and the actable node ringed. Expands to full screen; highlights scale.
 - Count: always qualified, pluralized, e.g. "1 element matches on this screen." During recomputation show an inline progress state; editing stays enabled.
 - Action row: **Tap** / **Long-press**, default Tap. Changing it updates the auto-suggested rule name until the name is edited.
+- When the target came from a demonstration, the action row arrives prefilled Tap or Long-press from the event and remains fully editable. Nothing else on A3 records the demonstration: no badge, toast, extra row, or success copy; the prefilled action row is the only trace.
 - Condition rows: prefilled, editable, removable. Text and Description have an is/contains toggle.
 - **Add condition** sheet: Text, Description, View ID, Type, Clickable, Visible, More → Full ID. Properties already used are hidden; v1 allows one row per property.
 - **Add context**: starts A5. Once set, a chip reads `Inside “<anchor>” ×` or `Next to “<anchor>” ×`.
@@ -320,6 +355,41 @@ A6 and A8 are inline states on A3, not separate pages.
 - Save performs the duplicate check; the existing-rule banner is unavailable without a tree.
 - Saved rules are identical in shape to picked rules.
 
+### 6.18 A15 — Recording (live capture only)
+
+- Entered from the Record icon on A2. There is no confirmation sheet; the chip is the explanation, and Stop ends the phase.
+- The authoring page steps back and the captured app comes forward, live. A small floating chip is the only GKD surface. Only the chip intercepts touches; the rest of the screen passes every touch to the app, so the demonstration is a real tap or long-press.
+- Chip copy: `Recording a tap — <App>` / `GKD rules are paused` / **Stop**. The title names the captured app; the pause line states the global rule pause.
+- The engine is idle for the whole phase, everywhere; it resumes the moment recording ends. This is the separator from GKD's own clicks, and the only one on Android 8–11.
+- There is no timer and no target highlight. The live screen is never marked, outlined, or highlighted. Starting recording takes no new screenshot; the authoring capture remains the only reference.
+- The first click or long-click event **from the captured app** ends the phase, usable or not. Events from other apps are ignored and do not consume the attempt; leaving the captured app leaves the phase live. A pre-tap window change in the captured app ends it with A17.
+- Back and Home remain ordinary app/launcher actions; they do not end the phase. Stop is always one tap away while the chip is visible.
+- On start, TalkBack announces: "Recording. Tap the element in %1$s. GKD rules are paused." The chip is one focusable group with a Stop action.
+- When the phase ends, the authoring page comes forward automatically over the frozen capture; there is no notification and no manual return step.
+
+### 6.19 A16 — Nothing was recorded (inline on A2)
+
+- Triggered by Stop with no event, or by an event that identifies no capture node. No-event causes include a Compose or custom-drawn tap and a self-deleting target; both reach A16 when the user stops.
+- Inline on A2, below the still-visible frozen screenshot; the pick hint is replaced.
+- Copy: **Nothing was recorded.** The cause line adapts:
+  - Stopped with no event: "You stopped before GKD saw a tap." plus the helper "Some apps don't report taps; picking on this screen still works."
+  - An event that identifies no capture node, with no screen change: "That tap didn't match anything on this screen." No helper.
+- Actions: **Pick it instead** (primary), **Record again**, **Cancel**.
+- **Pick it instead** returns to A2's normal pick state; because no demonstration occurred, the Record icon returns.
+- **Record again** starts a fresh recording session against the same capture.
+- **Cancel** ends the authoring session; there are no edits, so no discard prompt.
+- The Record icon is hidden while this state is shown. The state never appears on its own; silence does not time out, it requires Stop or an unusable event.
+
+### 6.20 A17 — Screen changed (inline on A2)
+
+- Triggered by a pre-tap window-state change in the captured app, or by a failed tap whose own navigation changed the screen. A window change caused by a usable tap is the demonstration's result, not an invalidation.
+- Inline on A2, below the still-visible frozen screenshot. Copy: **The screen changed.** / "Nothing was recorded."
+- Actions: **Capture this screen and record again** (primary), **Pick on the captured screen**, **Cancel**.
+- **Capture this screen and record again** replaces the authoring capture with the app's current screen and starts a new recording session. If that capture fails, A9 applies.
+- **Pick on the captured screen** keeps the old capture and enters picking — the same screenshot the page is already showing. The attempt was not a demonstration, so the Record icon returns.
+- **Cancel** ends the authoring session; no discard prompt.
+- The Record icon is hidden while this state is shown. The copy is deliberately generic: pre-tap drift and a failed tap that navigated before it could be used are the same dead end.
+
 ---
 
 ## 7. Interaction rules
@@ -330,6 +400,7 @@ A6 and A8 are inline states on A3, not separate pages.
 - The tap point resolves to the smallest meaningful node; zero-area, invisible, and snapshot-only nodes are not candidates.
 - When several candidates share the point, A2b decides; never guess silently between siblings with different labels.
 - Selecting a node always shows which node will be acted on, including the actable-ancestor climb.
+- A recorded target is a picked node too. Once it is resolved to a node of the authoring capture (section 8.8), every rule in this section applies unchanged; recording never introduces a second picking model.
 
 ### 7.2 Preview
 
@@ -337,6 +408,7 @@ A6 and A8 are inline states on A3, not separate pages.
 - Highlights show every match; the actable node is visually distinct and not distinguished by colour alone.
 - Recompute is asynchronous and never disables editing. Stale counts are not shown as current: show a progress state until the new count is ready.
 - The count is scoped: "on this screen", never a universal claim.
+- For a demonstration, the baseline is the pre-tap authoring capture, never a post-tap tree or the live screen. Uniqueness is measured on the screen the user demonstrated on.
 
 ### 7.3 Sheets and dialogs
 
@@ -348,6 +420,7 @@ A6 and A8 are inline states on A3, not separate pages.
 ### 7.4 Accessibility
 
 - Every control has a meaningful label; the preview canvas exposes the selected element and the match count.
+- The Record icon has the accessible name "Record a tap"; the recording chip is one focusable group with a Stop action and announces the recording start (section 6.18).
 - **Choose from a list** on A2 is the non-visual pick path (screen order, labeled nodes, 48 dp rows).
 - Match highlights and the selection ring use shape/outline as well as colour.
 - Target size: 48 dp minimum; text scales to the system font size; no content is clipped at large font sizes.
@@ -432,6 +505,40 @@ A rule opens in the guided editor only when all of the following hold:
 - Anything else opens raw with a plain-language reason. Never partially map and drop a condition.
 
 Parse-back requires a read-only selector AST (or a restricted parser sharing the engine grammar) exposed by `gkd-selector`. No grammar fork in the app. This is a v1 prerequisite for guided editing, not for authoring from scratch; if it is not delivered, representable rules route to raw instead of silently degrading.
+
+### 8.8 Recorded target resolution
+
+The demonstration must yield a node of the **pre-tap authoring capture** plus the demonstrated action; anything less is A16. The capture is taken once at entry and is the only reference. There is no rolling capture, no tap-time tree, and no matching against the live screen after navigation.
+
+Resolution order:
+
+1. Source has a `viewId` → the capture node with the same vid whose bounds overlap the source bounds, or the unique vid node.
+2. Otherwise, source has text/description → the capture node with the same text/description whose bounds overlap the source bounds.
+3. Otherwise the source is unlabeled → event text items in order; the first item with exactly one capture node whose text/description equals it and whose bounds lie within the source bounds wins. This recovers a labeled child from a bare clickable container.
+4. Multiple candidates → A2b "Which element?".
+5. No candidate → A16.
+
+The upstream actable climb and prefill ladder (section 8.3) then run unchanged. A class-plus-bounds fallback for labels that changed after the capture is rejected for v1: it can bind to a same-class node at the same bounds, and picking on the frozen capture already handles that case.
+
+The demonstration contributes exactly the picked node and the action, nothing else:
+
+- A tap prefills `click`, a long-press `longClick`; the action row stays editable.
+- No demonstration-specific conditions, activity scope, `preKeys`, timing, navigation memory, or new fields.
+- A labeled child of a clickable row targets that child; the engine's center-tap fallback makes it act correctly, so no climb to the row is needed.
+- The save bar is unchanged. Because the picked node is a capture node, its prefilled selector matches at least that node on the capture; zero-match can only follow user edits, and broad/duplicate keep their existing gates.
+- There is no live-screen check at save: every picked node is a node of the frozen capture, so "the target no longer exists at save time" cannot occur.
+- A window-state change **before** the tap invalidates the attempt (A17). A window-state change **caused by** the tap is the demonstration's result. A failed tap whose own navigation changed the screen is A17, never a retry against a stale capture.
+
+### 8.9 Observation boundary
+
+Recording v1 uses the accessibility click-event path only:
+
+- Native Views and WebView emit `TYPE_VIEW_CLICKED` / `TYPE_VIEW_LONG_CLICKED` for user taps; device evidence covers both, with WebView provider variation remaining residual.
+- Compose user taps emit no click event at all, and a custom-drawn tap emits one only if the app calls `performClick()`. A tap that removes its own target emits nothing. These reach A16 honestly; picking on the same capture still works.
+- No privileged raw-input observation, touch-exploration hover, tree-diff inference, or typed content-change path ships in v1. Each either rewrites the demonstrated gesture, requires privileged reach, or fails to name the node.
+- The event source can be a bare container. That is why step 3 of 8.8 uses event text within the source bounds; the source node alone is not trusted as the target.
+- GKD's own clicks would be indistinguishable from a user's on Android 8–11. The global engine pause during the recording phase is therefore mandatory. `event.getAction()` exists only from Android 12 and is not a documented contract; v1 does not rely on it.
+- Residual device variation — OEM/vendor ROMs, literal physical-finger behaviour, Android 8–11 on an older AVD, and WebView provider differences — is covered by the device-test checklist (section 16), not assumed away.
 
 ---
 
@@ -527,6 +634,12 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 
 `anyMatches` (until alternatives ship), `excludeMatches`, `excludeAllMatches`, `preKeys`, `position`, `swipeArg`, `activityIds`, `excludeActivityIds`, `versionCode`, `versionName`, `fastQuery`, `matchRoot`, `matchDelay`, `actionDelay`, `actionCd`, `forcedTime`, `order`, `priorityTime`, `priorityActionMaximum`, `actionCdKey`, `actionMaximumKey`, `scopeKeys`, category keys, snapshots/examples, and any group-level defaults.
 
+### 9.7 Recording changes no persisted field
+
+- A demonstration's action maps directly: tap → `action: "click"`, long-press → `action: "longClick"`. The target goes through the same canonical selector path as a pick.
+- The fields in 9.2 are the complete set. The limits fields follow the limits option only. No provenance, demonstration, source, or recording field is written.
+- No new group type, schema version, table, or subscription shape. The JSON5 mapping is unchanged, and a recorded rule is indistinguishable from a picked rule after saving.
+
 ---
 
 ## 10. Existing-rule detection
@@ -571,8 +684,16 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 | Save failure | A13 | Draft preserved; retry |
 | Abandon with edits | A12 | Discard confirmation |
 | Limits option | A3 options | Off by default; helper states the 10 s/one-tap consequence |
+| No tap event, or a Compose/custom-drawn/self-deleting tap | A16 | Honest "nothing was recorded"; no timeout; picking remains available |
+| Event identifies no capture node | A16 | Never invents a node; same fallback |
+| Screen changed before the tap, or a failed tap navigated | A17 | Recapture or pick on the old capture; no silent matching after navigation |
+| Tap in another app during recording | No surface change | Ignored; the chip stays; the attempt is not consumed |
+| GKD's own rule action during recording | A15 | Impossible by design: the engine is idle for the whole phase; mandatory on Android 8–11 |
+| Record requested in a stored, Desktop, dead-end, or post-pick session | — | Not offered; there is no fake recording entry |
+| Recapture from A17 fails | A9 | The existing dead end applies |
+| Record icon missed | Device test | Discoverability is a device-test observation; a one-line hint is a follow-up only if the icon is missed |
 
-Rules are never described as "verified", "safe", or "working". The preview speaks only about the captured screen.
+Rules are never described as "verified", "safe", or "working". The preview speaks only about the captured screen. Recording success adds no copy; the prefilled action row is the only trace.
 
 ---
 
@@ -634,8 +755,21 @@ English source strings; ship as Compose resources with plurals and positional pa
 | Discard title | Discard this rule? |
 | Discard actions | Discard / Keep editing |
 | Raw note | Advanced: this is GKD's rule format. |
+| Record action | (record-dot icon; accessible name) Record a tap |
+| Recording title | Recording a tap — %1$s |
+| Recording pause | GKD rules are paused |
+| Recording stop | Stop |
+| Recording announced | Recording. Tap the element in %1$s. GKD rules are paused. |
+| Nothing title | Nothing was recorded. |
+| Nothing cause (stopped) | You stopped before GKD saw a tap. |
+| Nothing helper | Some apps don't report taps; picking on this screen still works. |
+| Nothing cause (no node) | That tap didn't match anything on this screen. |
+| Nothing actions | Pick it instead / Record again / Cancel |
+| Changed title | The screen changed. |
+| Changed body | Nothing was recorded. |
+| Changed actions | Capture this screen and record again / Pick on the captured screen / Cancel |
 
-Rules: counts are pluralized; names/labels are data; no sentence concatenation; no vocabulary from section 3.2 on the golden path.
+Rules: counts are pluralized; names/labels are data; no sentence concatenation; no vocabulary from section 3.2 on the golden path. Recording has no success copy; a successful demonstration is shown only by the ringed target and the prefilled action row.
 
 ---
 
@@ -644,6 +778,26 @@ Rules: counts are pluralized; names/labels are data; no sentence concatenation; 
 **Phase 1 — this spec**
 
 - All entries, the one-page flow, condition rows + one context, live preview, broad/narrow, zero-match save, duplicate check, existing-rule banner, guided re-edit for representable rules, raw fallback, limits option, copy, accessibility list pick.
+
+**Phase 1 addendum — recording v1**
+
+Recording ships as a secondary entry alongside the picking flow. Picking must work unchanged; recording substitutes only the pick step. The evidence basis is device observation of native-View and WebView taps; Compose and custom-drawn apps remain an honest dead end.
+
+Ships:
+
+- **Entry:** live-capture sessions only (the floating rule button), never the app page, a stored snapshot, or Desktop. Record is an icon-only top-bar dot on A2 with the accessible name "Record a tap"; it appears only after usable nodes, is hidden after a successful demonstration and returns after a failed attempt. No confirmation sheet and no separate setting.
+- **Vocabulary:** tap and long-press only.
+- **Budget:** one demonstration per authoring session → one candidate rule. A failed attempt is a new recording session against the same capture, except when A17 recaptures; retries do not spend the demonstration.
+- **Live phase:** the captured app comes forward; a floating chip names the app, states the global rule pause and offers Stop. The authoring page stays in the back stack; the chip is the only GKD surface. No timer. The engine is idle everywhere for the whole phase.
+- **Scope:** only events from the captured app count; taps elsewhere are ignored and do not consume the attempt; leaving the app keeps the phase live; a pre-tap screen change ends it with A17; a post-tap change is the demonstration's result.
+- **Return and resolution:** the first click/long-click event from the captured app ends the phase, usable or not. The recording starts no new capture; resolution uses the pre-tap capture per 8.8, then the existing actable climb and prefill. Ambiguity → A2b; no node → A16; one node → A3 with the action row prefilled Tap/Long-press and fully editable.
+- **Failure states:** both ship in full — A16 "Nothing was recorded" (Pick it instead / Record again / Cancel) and A17 "The screen changed" (Capture this screen and record again / Pick on the captured screen / Cancel).
+- **Downstream:** unchanged — preview, existing-rule banner, broad/narrow, zero-match, duplicate check, save/error/discard, limits option, raw handoff. No provenance field, badge, toast, or rule-level difference.
+- **Persistence:** JSON5 mapping unchanged (section 9.7); `click` / `longClick`, no new fields, tables, or schema versions.
+- **Discoverability:** an icon-only entry is a device-test observation. A one-line hint is a follow-up only if the icon is missed; it is not part of the initial cut.
+- **Evidence bar:** record → save → reopen the app → the engine fires; engine idle while recording; the device-test checklist in section 16 covers native/WebView taps, the Compose/custom-drawn dead end, other-app taps, screen changes, bare-container sources, long-press, ambiguity, Android 8–11, and return paths.
+
+Deferred past recording v1: multi-action/multi-rule sessions; actions other than tap and long-press (scroll, text input, back); recording from the app page, a stored snapshot, or Desktop; Compose/custom-drawn observation (privileged input, touch exploration, tree-diff); feeding demonstrations to automatic or LLM generation; provenance fields, badges, a separate Record setting, recording as an accessibility path, and sequencing/replay semantics.
 
 **Phase 2 — after device evidence**
 
@@ -675,6 +829,13 @@ Rules: counts are pluralized; names/labels are data; no sentence concatenation; 
 | Repeated action on a persistent target | A rule without limits can act ~once per second | Broad confirmation plus the limits option; document the default honestly |
 | Reserved-name group and localization | Rename/language change creates a second group | Accepted in #4; documented in 9.1; old group remains editable as raw |
 | Stale stored snapshot | Preview may not represent the current screen | Show snapshot age; keep the count scoped to the preview |
+| Compose/custom-drawn user taps emit no click event | Recording sees nothing; the target cannot be identified | Honest A16; picking remains available; scope stated in 8.9; no fake success |
+| GKD acts during a recording phase | GKD's own clicks could be recorded; on Android 8–11 nothing else separates them | Engine idle for the whole phase; device-test on Android 8–11 and current versions |
+| Event source is a bare container | Source node has no label, so the target cannot be named from the source alone | Event-text resolution within source bounds (8.8); device-test with a Settings row |
+| OEM/vendor ROM and WebView provider variation | Taps may be missed or shaped differently | Device-test matrix; treat as residual, not a silent assumption |
+| Icon-only Record entry is missed | Users never discover recording | Device-test observation; one-line hint is a follow-up only if missed |
+| Screen changes before the tap | The pre-tap capture no longer describes the demonstrated screen | A17 with recapture or picking on the old capture; no silent matching |
+| Recording phase outlives the captured app's foreground time | The global pause and the chip must remain reachable | Chip never hidden; Stop one tap away; engine resumes on any exit from the phase |
 
 ---
 
@@ -724,6 +885,33 @@ Rules: counts are pluralized; names/labels are data; no sentence concatenation; 
 - [ ] Abandon with edits asks; abandon without edits does not.
 - [ ] Saving into a disabled authoring group or a disabled local subscription succeeds and shows the notice; enabling the group makes the rule fire.
 
+**Recording (live capture only)**
+
+- [ ] End to end: Record → demonstrate a tap → save → reopen the target app → the engine fires the saved rule.
+- [ ] Engine idle: while recording, no rule acts on any app; the engine resumes when recording ends.
+- [ ] Native-View app: a tap lands on A3; a long-press lands on A3 with Long-press prefilled and editable.
+- [ ] WebView: a user tap lands on A3; record the WebView provider/version because provider variation is residual.
+- [ ] Compose plain-button tap: no click event; Stop or the ending state lands on A16, and picking on the capture still works.
+- [ ] Self-deleting target: the tap emits nothing; Stop lands on A16.
+- [ ] Bare-container source: event text within the source bounds resolves the intended capture node (for example a labeled Settings row child).
+- [ ] Ambiguous event: multiple capture candidates open A2b; cancelling returns to picking and the Record icon returns.
+- [ ] Stop with no event: A16 with "You stopped before GKD saw a tap."; Pick it instead returns to picking.
+- [ ] An event that identifies no capture node without a screen change: A16 with "That tap didn't match anything on this screen."
+- [ ] Pre-tap screen change in the captured app: A17 wherever the user is; the authoring page returns.
+- [ ] Post-tap navigation or dialog with a locatable node: A3, not A17.
+- [ ] Failed tap whose own navigation changed the screen: A17.
+- [ ] A17 recapture: "Capture this screen and record again" replaces the authoring capture; if capture fails, A9 applies.
+- [ ] A17 "Pick on the captured screen": keeps the old capture and returns to picking; the Record icon returns.
+- [ ] Tap in another app: ignored, chip stays, attempt not consumed; Stop remains one tap away.
+- [ ] Leaving the captured app (Home/recents): session stays live; returning to the captured app still works.
+- [ ] Return from recording brings the authoring page forward automatically; no notification or manual step.
+- [ ] A successful demonstration hides the Record icon for the rest of the authoring session, including after returning to A2; a failed attempt restores it.
+- [ ] Record is absent from app-page, stored-snapshot, and Desktop sessions, from A9, and from A3 onward.
+- [ ] Record starts no new capture; the pre-tap screenshot is the preview and uniqueness baseline.
+- [ ] Icon discoverability: observe whether the top-bar dot is found without a hint; record the result.
+- [ ] Android 8–11 AVD: a click event is observed, the engine pause holds, and GKD's own clicks are never recorded.
+- [ ] OEM/vendor ROM and literal physical-finger tap: record any variation as residual risk.
+
 **Re-entry and raw**
 
 - [ ] Re-capture the same screen: the banner detects the new rule and guided edit round-trips.
@@ -753,6 +941,9 @@ A build is spec-complete when:
 6. No authoring capture survives a completed, abandoned, or killed session.
 7. The limits option writes exactly the three documented fields when on and none when off.
 8. Copy exists as Compose resources with plurals and positional parameters; the golden path uses only the approved vocabulary.
+9. Recording is offered only in live-capture sessions after a usable tree; it never appears in app-page, stored-snapshot, Desktop, dead-end, or post-pick states.
+10. A demonstration resolves to a node of the pre-tap capture and prefills the action. It adds no rule-level or persisted difference. No event, no locatable node, and pre-tap screen changes are covered by A16/A17, and the engine is idle for the whole recording phase.
+11. The JSON5 mapping is unchanged: a recorded tap or long-press writes exactly the fields in 9.2, plus the limits bundle only when the option is on.
 
 ---
 
@@ -768,3 +959,35 @@ A build is spec-complete when:
 | 11 | #4 duplicates, #5 representability |
 | 12, 13 | #2 safety, #6 copy deck, #7 diagnostics |
 | 14–16 | #7 phasing, risks, device tests |
+| 3, 4, 5.4, 6.18–6.20, 13 | Recording amendment: #15 vocabulary, #17 choreography, #18 MVP cut |
+| 8.8–8.9 | #16 target resolution, #20 observation boundary, #12 platform semantics, #14 device evidence |
+| 9.7, 14 addendum | #18 persistence and MVP, #16 no demonstration-specific conditions |
+| 16 (recording) | #18 device-test additions, #14 residual risks |
+
+---
+
+## 19. Amendment log — recording v1
+
+The recording addendum was folded in by ticket [#19](https://github.com/fktpp2022/gkd/issues/19) from the decisions on map [#11](https://github.com/fktpp2022/gkd/issues/11). It is an addition, not a rewrite: the upstream picking flow remains the primary path and is unchanged.
+
+| Section | Change | Why |
+| --- | --- | --- |
+| Header, status, sources | Amendment note and recording sources added | Point readers at the addendum and its decision tickets |
+| 2.1–2.2 | Recording phases in scope; deferred recording work out of scope | #18 go/no-go and MVP cut |
+| 3.1–3.2 | Picked node widened; recording session, demonstration, recorded-rule non-term; vocabulary note | #15 domain model |
+| 4.1–4.2 | "Record offered" column and live-capture-only entry | #17 choreography, #18 entry cut |
+| 5.2–5.4 | Recording back stack, one-demonstration budget, engine pause, retries, capture as sole reference, screen-change semantics | #16 baseline and session boundary, #17 choreography, #18 |
+| 6.1, 6.4, 6.6 | A2 Record icon entry, A15–A17 state rows, action prefill on A3 | #16, #17, #18 |
+| 6.18–6.20 | A15 Recording, A16 Nothing was recorded, A17 Screen changed, with copy and actions | #17 choreography, #18 failure-state cut |
+| 7.1, 7.2, 7.4 | Recorded target is a picked node; pre-tap baseline; recording accessibility | #15, #16, #17 |
+| 8.8 | Recorded-target resolution order, actable climb, action prefill, same save bar, no live-screen check | #16 what a demonstration must yield |
+| 8.9 | Click-event observation boundary; non-native dead end; engine pause; residuals | #12 platform semantics, #14 device evidence, #20 observation mechanisms |
+| 9.7 | Explicit statement that JSON5 mapping is unchanged; action mapping; no provenance | #18 amendment contract item 8 |
+| 12–13 | Diagnostics and copy additions | #17 copy deck, #18 failure states |
+| 14 | Phase 1 recording-v1 addendum: ships and deferred | #18 MVP cut |
+| 15 | Recording risks added | #12, #14, #20 |
+| 16 | Recording device-test checklist added | #18 amendment contract item 6, #14 residual risks |
+| 17 | Recording acceptance criteria added | #18 amendment contract |
+| 18 | Recording traceability rows added | #18 amendment contract item 7 |
+
+All other sections are unchanged. The upstream decisions in #2–#7 remain in force; recording only adds a second way to designate the picked node and does not alter the conditions model, preview, save gates, or persistence. `GLOSSARY.md` was already aligned by #15 and needed no change here.

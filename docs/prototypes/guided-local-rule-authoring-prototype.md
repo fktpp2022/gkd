@@ -1,6 +1,6 @@
 # Guided local-rule authoring — paper prototype
 
-**Status:** prototype v1, October 2026. Section 9 is the recording amendment (map [#11](https://github.com/fktpp2022/gkd/issues/11)), added October 2026. Review artifact for the UX spec; no production code.
+**Status:** prototype v1, October 2026. Section 9 is the recording amendment (map [#11](https://github.com/fktpp2022/gkd/issues/11)), added October 2026 and aligned with the recording-v1 cut ([#18](https://github.com/fktpp2022/gkd/issues/18)) by [#19](https://github.com/fktpp2022/gkd/issues/19). Review artifact for the UX spec; no production code.
 
 **Scope:** the Android golden path from a visible screen to a saved local rule, plus the states that decide the flow's shape: overlap disambiguation, multiple matches, zero matches, an already-handled target, duplicate saves, re-entry, and dead ends.
 
@@ -35,7 +35,12 @@ Authoring page
     │            └─ existing rule ──▶ banner ──▶ Edit rule | Edit in JSON | Create anyway
     │
     ├─ overlap at tap point ──▶ Which element? sheet ──▶ Conditions
-    └─ no usable nodes ──▶ dead end ──▶ manual conditions | retry | raw
+    ├─ no usable nodes ──▶ dead end ──▶ manual conditions | retry | raw
+    └─ Record (live capture only) ──▶ Recording ──▶ tap/long-press in captured app
+                                          ├─ one node ──▶ Conditions (action prefilled)
+                                          ├─ several nodes ──▶ Which element? sheet ──▶ Conditions
+                                          ├─ no node / stopped ──▶ Nothing was recorded
+                                          └─ pre-tap screen change ──▶ Screen changed
 
 Save ──▶ duplicate check ──▶ Replace | Keep both
 Back with changes ──▶ Discard this rule?
@@ -385,6 +390,8 @@ Abandon without edits returns directly and deletes the transient capture. An aba
 | DeadEnd | No nodes / no screenshot + no nodes | Retry / manual / raw | Capturing, Conditions, Raw |
 | Discard | Back with edits | Discard / keep editing | Idle, Conditions |
 
+Recording adds the Recording, NothingRecorded and ScreenChanged phases. See section 9.7.
+
 ---
 
 ## 5. Copy deck
@@ -415,6 +422,8 @@ Abandon without edits returns directly and deletes the transient capture. An aba
 
 **Hidden vocabulary:** selector, node, activity, activity id, group key, match time, action maximum, reset match, fast query, JSON5, subscription, package name. These may appear in the advanced editor only.
 
+Recording copy additions are in section 9.8; there is no success copy.
+
 ---
 
 ## 6. Interaction notes
@@ -437,6 +446,7 @@ Abandon without edits returns directly and deletes the transient capture. An aba
 3. **Ambiguity:** default to the smallest node; ask only when several nodes share the point.
 4. **Re-entry:** in v1, edit an existing guided rule by re-capturing its screen and using the banner; there is no rule list inside the authoring flow.
 5. **Amount of visible GKD vocabulary:** zero in the golden path; JSON remains an explicitly advanced exit.
+6. **Recording entry:** in live-capture sessions only, is the icon-only dot discoverable, and does the no-recording helper carry the right truth? Section 9.9 has the recording-specific prompts.
 
 ---
 
@@ -450,7 +460,7 @@ Templates/recipes, OR variants, activity-only scope, index/position narrowing, r
 
 **Status:** added October 2026 for the [recording effort](https://github.com/fktpp2022/gkd/issues/11). This section adds an alternative to the pick step; it changes nothing downstream of the picked node.
 
-**Inputs:** [recording vocabulary](https://github.com/fktpp2022/gkd/issues/15), [what a demonstration must yield](https://github.com/fktpp2022/gkd/issues/16), [observing non-native taps](https://github.com/fktpp2022/gkd/issues/20), and the [device evidence](https://github.com/fktpp2022/gkd/issues/14).
+**Inputs:** [recording vocabulary](https://github.com/fktpp2022/gkd/issues/15), [what a demonstration must yield](https://github.com/fktpp2022/gkd/issues/16), [recording session choreography](https://github.com/fktpp2022/gkd/issues/17), [go/no-go and the MVP cut](https://github.com/fktpp2022/gkd/issues/18), [observing non-native taps](https://github.com/fktpp2022/gkd/issues/20), and the [device evidence](https://github.com/fktpp2022/gkd/issues/14).
 
 **In one line:** in a live-capture session the user may perform one tap or long-press in the app; GKD locates that node on the frozen capture and continues exactly as if it had been picked.
 
@@ -481,6 +491,7 @@ Record is a single icon in the top bar of S2 — a filled record dot with the ac
 - It is absent from S3 and later screens: recording substitutes the pick, and the conditions screen has nothing to record.
 - It is hidden once a demonstration has succeeded in this authoring session, even if the user returns to S2 — one demonstration per session. After a failed attempt it returns; a failed attempt is not a demonstration.
 - Tapping it starts recording immediately. There is no confirmation sheet; the recording chip is the explanation, and Stop reverses the mode.
+- There is no separate Record setting. Icon-only discoverability is a device-test observation; a one-line hint is a follow-up only if the icon is missed.
 
 ### 9.2 S13 — Recording
 
@@ -515,7 +526,7 @@ The authoring page steps back; the captured app comes forward, live. A small chi
 
 When the session ends, GKD brings the authoring page forward over the frozen capture. There is no notification and no manual return step.
 
-- The event's node is located **on the authoring capture**, never on the live screen: source view id → source text/description → event text items within the source bounds, then the existing actable climb and prefill ladder.
+- The event's node is located **on the authoring capture**, never on the live screen: source view id whose bounds overlap → source text/description → the event text item that names exactly one capture node within the source bounds; then the existing actable climb and prefill ladder. There is no class-plus-bounds fallback for labels that changed after the capture.
 - No capture node is found → S14, "Nothing was recorded".
 - Several capture nodes match → S2b "Which element?" over the authoring page; choosing one continues to S3. Cancelling returns to S2's normal pick state; the attempt was not a demonstration, so the Record icon returns.
 - One capture node resolves → S3, with the target ringed as after a pick.
@@ -660,8 +671,9 @@ Recording is a phase inside the authoring session: the authoring page stays in t
 
 ### 9.10 Non-goals of this amendment
 
-- Compose and custom-drawn observation; those apps reach S14 honestly.
+- Compose and custom-drawn observation through privileged input, touch exploration, or tree-diff; those apps reach S14 honestly.
 - Multi-action or multi-rule recording, sequences, and replay.
 - Recording from stored snapshots, the app page, or Desktop.
 - A provenance field, badge, toast, or any rule-level difference after saving.
+- A separate Record setting or onboarding flow.
 - Recording as an accessibility path; the list pick remains the non-visual route.
