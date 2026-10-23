@@ -47,6 +47,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,6 +72,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.min
+import kotlinx.coroutines.launch
 import li.gkd.app.authoring.GuidedCondition
 import li.gkd.app.authoring.GuidedConditionProperty
 import li.gkd.app.authoring.GuidedContext
@@ -108,7 +110,10 @@ import li.gkd.app.ui.navigation.UpsertRuleGroupRoute
 import li.gkd.app.ui.platform.GkBackHandler
 import li.gkd.app.ui.platform.GkFullscreenDialog
 import li.gkd.app.ui.platform.UiHost
+import li.gkd.app.ui.platform.captureAndStartGuidedRecording
 import li.gkd.app.ui.platform.finishGuidedAuthoring
+import li.gkd.app.ui.platform.guidedRecordingSupported
+import li.gkd.app.ui.platform.startGuidedRecording
 import li.gkd.app.ui.text.formatTimeAgo
 import li.gkd.app.util.ToastUtils
 import li.gkd.db.SubscriptionIds
@@ -137,6 +142,37 @@ fun GuidedAuthoringPage(
     var showAddCondition by remember { mutableStateOf(false) }
     var showOptions by remember { mutableStateOf(false) }
     var showExistingMore by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
+    val recordingSupported = guidedRecordingSupported()
+    val canRecord = state.phase == GuidedAuthoringPhase.Picking &&
+            !vm.fromSnapshot &&
+            vm.hasCapture &&
+            !state.recordSpent &&
+            state.recordingFailure == null &&
+            recordingSupported
+
+    val startRecording: () -> Unit = {
+        val context = vm.recordingContext()
+        if (context != null) {
+            pending = null
+            vm.prepareRecording()
+            host.startGuidedRecording(context)
+        }
+    }
+    val captureAndRecord: () -> Unit = {
+        val appId = state.appId
+        if (appId != null) {
+            pending = null
+            vm.prepareRecording()
+            scope.launch {
+                if (host.captureAndStartGuidedRecording(appId, state.appName)) {
+                    vm.adoptRecapturedCapture()
+                } else {
+                    vm.recaptureFailed()
+                }
+            }
+        }
+    }
 
     val close: () -> Unit = {
         if (route.fromOverlay) host.finishGuidedAuthoring() else mainVm.navigator.pop()
@@ -231,6 +267,12 @@ fun GuidedAuthoringPage(
                     if (state.phase == GuidedAuthoringPhase.Editing) {
                         GuidedOverflowAction(onEditJson = { vm.requestRawHandoff() })
                     }
+                    if (canRecord) {
+                        GkIconButton(
+                            imageVector = GkIcons.Record,
+                            onClick = startRecording,
+                        )
+                    }
                 },
             )
         },
@@ -296,6 +338,7 @@ fun GuidedAuthoringPage(
                             sourceLabel = snapshotSource,
                             pending = pending,
                             pickLabel = pending?.let(vm::resolvePick),
+                            failure = state.recordingFailure,
                             onCandidates = { candidates ->
                                 if (candidates.size > 1) {
                                     pending = candidates.first()
@@ -309,6 +352,10 @@ fun GuidedAuthoringPage(
                             },
                             onChooseAgain = { pending = null },
                             onChooseFromList = { showNodeList = true },
+                            onPickItInstead = vm::dismissRecordingFailure,
+                            onRecordAgain = startRecording,
+                            onCaptureAndRecord = captureAndRecord,
+                            onCancelRecording = vm::closeSession,
                         )
                     }
                 }
@@ -558,17 +605,32 @@ private fun GuidedPickingContent(
     sourceLabel: String?,
     pending: NodeInfo?,
     pickLabel: li.gkd.app.authoring.GuidedPick?,
+    failure: GuidedRecordingFailure?,
     onCandidates: (List<NodeInfo>) -> Unit,
     onUse: () -> Unit,
     onChooseAgain: () -> Unit,
     onChooseFromList: () -> Unit,
+    onPickItInstead: () -> Unit,
+    onRecordAgain: () -> Unit,
+    onCaptureAndRecord: () -> Unit,
+    onCancelRecording: () -> Unit,
 ) {
     Column(modifier = Modifier.fillMaxSize()) {
-        Text(
-            text = stringResource(Res.string.guided_pick_hint),
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            style = MaterialTheme.typography.bodyLarge,
-        )
+        if (failure == null) {
+            Text(
+                text = stringResource(Res.string.guided_pick_hint),
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+        } else {
+            GuidedRecordingFailureContent(
+                failure = failure,
+                onPickItInstead = onPickItInstead,
+                onRecordAgain = onRecordAgain,
+                onCaptureAndRecord = onCaptureAndRecord,
+                onCancel = onCancelRecording,
+            )
+        }
         if (sourceLabel != null) {
             Text(
                 text = sourceLabel,
@@ -584,7 +646,7 @@ private fun GuidedPickingContent(
             actableId = pickLabel?.actable?.id,
             selectedId = pending?.id,
             description = stringResource(Res.string.guided_canvas_pick_description),
-            onCandidates = onCandidates,
+            onCandidates = { if (failure == null) onCandidates(it) },
             modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
         )
         if (screenshot == null) {
@@ -595,24 +657,111 @@ private fun GuidedPickingContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (pending != null) {
-            GuidedSelectedSummary(node = pending, pick = pickLabel)
-        }
-        Row(
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            TextButton(onClick = onChooseFromList) {
-                Text(stringResource(Res.string.guided_choose_from_list))
-            }
-            Spacer(Modifier.weight(1f))
+        if (failure == null) {
             if (pending != null) {
-                OutlinedButton(onClick = onChooseAgain) {
-                    Text(stringResource(Res.string.guided_choose_again))
+                GuidedSelectedSummary(node = pending, pick = pickLabel)
+            }
+            Row(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                TextButton(onClick = onChooseFromList) {
+                    Text(stringResource(Res.string.guided_choose_from_list))
                 }
-                Button(onClick = onUse) {
-                    Text(stringResource(Res.string.guided_use_element))
+                Spacer(Modifier.weight(1f))
+                if (pending != null) {
+                    OutlinedButton(onClick = onChooseAgain) {
+                        Text(stringResource(Res.string.guided_choose_again))
+                    }
+                    Button(onClick = onUse) {
+                        Text(stringResource(Res.string.guided_use_element))
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun GuidedRecordingFailureContent(
+    failure: GuidedRecordingFailure,
+    onPickItInstead: () -> Unit,
+    onRecordAgain: () -> Unit,
+    onCaptureAndRecord: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceVariant,
+            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+            verticalArrangement = Arrangement.spacedBy(4.dp),
+        ) {
+            when (failure) {
+                GuidedRecordingFailure.NoTap -> {
+                    Text(
+                        text = stringResource(Res.string.guided_nothing_recorded),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(Res.string.guided_nothing_recorded_stopped),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        text = stringResource(Res.string.guided_nothing_recorded_helper),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+
+                GuidedRecordingFailure.NoNode -> {
+                    Text(
+                        text = stringResource(Res.string.guided_nothing_recorded),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(Res.string.guided_nothing_recorded_no_match),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+
+                GuidedRecordingFailure.ScreenChanged -> {
+                    Text(
+                        text = stringResource(Res.string.guided_screen_changed),
+                        style = MaterialTheme.typography.titleMedium,
+                    )
+                    Text(
+                        text = stringResource(Res.string.guided_screen_changed_nothing),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+            FlowRow(
+                modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                if (failure == GuidedRecordingFailure.ScreenChanged) {
+                    Button(onClick = onCaptureAndRecord) {
+                        Text(stringResource(Res.string.guided_capture_this_screen))
+                    }
+                    TextButton(onClick = onPickItInstead) {
+                        Text(stringResource(Res.string.guided_pick_on_captured_screen))
+                    }
+                } else {
+                    Button(onClick = onPickItInstead) {
+                        Text(stringResource(Res.string.guided_pick_it_instead))
+                    }
+                    TextButton(onClick = onRecordAgain) {
+                        Text(stringResource(Res.string.guided_record_again))
+                    }
+                }
+                TextButton(onClick = onCancel) {
+                    Text(stringResource(Res.string.action_cancel))
                 }
             }
         }

@@ -22,6 +22,7 @@ import li.gkd.app.a11y.A11yCommonImpl
 import li.gkd.app.a11y.A11yRuleEngine
 import li.gkd.app.a11y.A11yRuntime
 import li.gkd.app.a11y.A11yState
+import li.gkd.app.a11y.GuidedRecordingBridge
 import li.gkd.app.a11y.currentTopActivity
 import li.gkd.app.a11y.updateTopActivity
 import li.gkd.app.appScope
@@ -80,7 +81,12 @@ abstract class A11yService : AccessibilityService(), A11yCommonImpl {
     override val ruleEngine by lazy { A11yRuleEngine(this) }
 
     override fun onInterrupt() {}
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = ruleEngine.onA11yEvent(event)
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null && A11yRuntime.isEffective(this)) {
+            GuidedRecordingBridge.onEvent(event)
+        }
+        ruleEngine.onA11yEvent(event)
+    }
 
     private val startTime = System.currentTimeMillis()
     override var justStarted: Boolean = true

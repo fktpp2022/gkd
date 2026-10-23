@@ -1214,6 +1214,21 @@
     <string name="guided_enable_body">在其他应用上方显示一个小的 GKD 按钮。在想要修复的界面上点按它，GKD 会捕获该界面并让你选择要操作的元素。</string>
     <string name="guided_enable_turn_on">开启</string>
     <string name="guided_enable_not_now">暂不开启</string>
+    <string name="guided_record">录制点按</string>
+    <string name="guided_recording_title">正在录制点按 — %1$s</string>
+    <string name="guided_recording_paused">GKD 规则已暂停</string>
+    <string name="guided_recording_stop">停止</string>
+    <string name="guided_recording_announcement">正在录制。请在 %1$s 中点按要操作的元素。GKD 规则已暂停。</string>
+    <string name="guided_nothing_recorded">没有录制到内容。</string>
+    <string name="guided_nothing_recorded_stopped">你已停止，GKD 没有看到点按。</string>
+    <string name="guided_nothing_recorded_helper">部分应用不会报告点按；你仍可在此屏幕上选择元素。</string>
+    <string name="guided_nothing_recorded_no_match">该点按与当前屏幕上的任何内容都不匹配。</string>
+    <string name="guided_pick_it_instead">改为选择元素</string>
+    <string name="guided_record_again">重新录制</string>
+    <string name="guided_screen_changed">屏幕已改变。</string>
+    <string name="guided_screen_changed_nothing">没有录制到内容。</string>
+    <string name="guided_capture_this_screen">捕获此屏幕并重新录制</string>
+    <string name="guided_pick_on_captured_screen">在已捕获的屏幕上选择</string>
 
     <plurals name="guided_match_count">
         <item quantity="one">此屏幕上有 %1$s 个元素匹配。</item>

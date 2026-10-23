@@ -10,8 +10,16 @@ object GuidedAuthoringLaunch {
 
     fun open() {
         val intent = Intent(app, MainActivity::class.java).apply {
-            action = action
+            action = GuidedAuthoringLaunch.action
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP)
+        }
+        app.startActivity(intent)
+    }
+
+    /** Brings the existing authoring task forward without navigating a new route. */
+    fun returnToAuthoring() {
+        val intent = Intent(app, MainActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT)
         }
         app.startActivity(intent)
     }

@@ -18,6 +18,7 @@ import androidx.compose.material.icons.filled.CenterFocusWeak
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.ExpandLess
 import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.FiberManualRecord
 import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Memory
 import androidx.compose.material.icons.filled.MoreVert
@@ -163,6 +164,7 @@ fun getIconDefaultDesc(imageVector: ImageVector): String? = when (imageVector) {
     GkIcons.OpenInNew -> stringResource(Res.string.open_new_page)
     GkIcons.ContentCopy -> stringResource(Res.string.text_copy)
     GkIcons.MoreVert -> stringResource(Res.string.more_actions)
+    GkIcons.Record -> stringResource(Res.string.guided_record)
     else -> null
 }
 
@@ -239,4 +241,5 @@ object GkIcons {
     val TextFields get() = Icons.Outlined.TextFields
     val ArrowDownward get() = Icons.Outlined.ArrowDownward
     val Check get() = Icons.Outlined.Check
+    val Record get() = Icons.Filled.FiberManualRecord
 }

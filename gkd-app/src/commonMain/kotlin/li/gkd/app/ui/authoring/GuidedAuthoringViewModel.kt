@@ -3,6 +3,7 @@ package li.gkd.app.ui.authoring
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
@@ -32,6 +33,12 @@ import li.gkd.app.authoring.GuidedPrefillBuilder
 import li.gkd.app.authoring.GuidedPrefillResult
 import li.gkd.app.authoring.GuidedPreviewBuilder
 import li.gkd.app.authoring.GuidedPreviewResult
+import li.gkd.app.authoring.GuidedRecordingContext
+import li.gkd.app.authoring.GuidedRecordingPhase
+import li.gkd.app.authoring.GuidedRecordingResolution
+import li.gkd.app.authoring.GuidedRecordingResolver
+import li.gkd.app.authoring.GuidedRecordingSession
+import li.gkd.app.authoring.GuidedRecordingSignal
 import li.gkd.app.authoring.GuidedRuleAction
 import li.gkd.app.authoring.GuidedRuleCandidate
 import li.gkd.app.authoring.GuidedRuleData
@@ -51,6 +58,7 @@ import li.gkd.app.authoring.GuidedSavePlanResult
 import li.gkd.app.authoring.GuidedSavePlanner
 import li.gkd.app.authoring.GuidedSelectorCompileResult
 import li.gkd.app.authoring.GuidedSelectorCompiler
+import li.gkd.app.authoring.GuidedTapEvent
 import li.gkd.app.authoring.GuidedTextOperator
 import li.gkd.app.authoring.toSelectorDraft
 import li.gkd.app.model.NodeInfo
@@ -68,6 +76,8 @@ import li.gkd.db.SubscriptionIds
 import org.jetbrains.compose.resources.getString
 
 enum class GuidedAuthoringPhase { Picking, Editing, DeadEnd }
+
+enum class GuidedRecordingFailure { NoTap, NoNode, ScreenChanged }
 
 sealed interface GuidedPreviewState {
     data object NoPreview : GuidedPreviewState
@@ -100,6 +110,8 @@ data class GuidedAuthoringState(
     val saveError: Boolean = false,
     val contextMode: GuidedContextMode? = null,
     val overlap: List<NodeInfo>? = null,
+    val recordingFailure: GuidedRecordingFailure? = null,
+    val recordSpent: Boolean = false,
 )
 
 enum class GuidedDuplicateKind { Replaceable, AuthoringAdvanced, Foreign }
@@ -123,11 +135,11 @@ data class GuidedRawTarget(
 class GuidedAuthoringViewModel(
     private val startManualAppId: String? = null,
 ) : BaseViewModel() {
-    private val capture: GuidedCapture? = GuidedCaptureStore.current.value
-    private val adapter: SnapshotNodeAdapter? =
+    private var capture: GuidedCapture? = GuidedCaptureStore.current.value
+    private var adapter: SnapshotNodeAdapter? =
         capture?.snapshot?.nodes?.takeIf { it.isNotEmpty() }?.let(::SnapshotNodeAdapter)
-    private val nodes: List<NodeInfo> = capture?.snapshot?.nodes.orEmpty()
-    private val usable = nodes.any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }
+    private var nodes: List<NodeInfo> = capture?.snapshot?.nodes.orEmpty()
+    private var usable = nodes.any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }
 
     private var ruleScope: GuidedRuleScope? = null
     private var authoringGroupName: String = ""
@@ -137,6 +149,9 @@ class GuidedAuthoringViewModel(
     private var previewJob: Job? = null
     private var detectionJob: Job? = null
     private var persistJob: Job? = null
+    private var recordingWaitJob: Job? = null
+    private var pendingRecordedAction: GuidedRuleAction? = null
+    private var screenChangedWhileResolving = false
 
     private val initialPhase = when {
         startManualAppId != null -> GuidedAuthoringPhase.Editing
@@ -186,6 +201,115 @@ class GuidedAuthoringViewModel(
         viewModelScope.launch {
             authoringGroupName = getString(Res.string.guided_authoring_group_name)
             loadRuleScope()
+        }
+        viewModelScope.launch {
+            GuidedRecordingSession.signals.collect { signal ->
+                when (signal) {
+                    is GuidedRecordingSignal.Tap -> onRecordedTap(signal.event)
+                    GuidedRecordingSignal.Stopped -> setRecordingFailure(GuidedRecordingFailure.NoTap)
+                    GuidedRecordingSignal.ScreenChanged -> onScreenChanged()
+                }
+            }
+        }
+    }
+
+    fun recordingContext(): GuidedRecordingContext? {
+        val capture = capture ?: return null
+        if (capture.fromSnapshot || !usable) return null
+        if (state.value.phase != GuidedAuthoringPhase.Picking) return null
+        return GuidedRecordingContext(
+            appId = capture.snapshot.appId,
+            appName = state.value.appName ?: capture.snapshot.appId,
+            activityId = capture.snapshot.activityId,
+        )
+    }
+
+    fun prepareRecording() {
+        recordingWaitJob?.cancel()
+        pendingRecordedAction = null
+        screenChangedWhileResolving = false
+        state.update { it.copy(recordingFailure = null, overlap = null) }
+    }
+
+    fun dismissRecordingFailure() {
+        state.update { it.copy(recordingFailure = null) }
+    }
+
+    fun adoptRecapturedCapture() {
+        val capture = GuidedCaptureStore.current.value ?: return
+        val adapter = capture.snapshot.nodes
+            .takeIf { it.isNotEmpty() }
+            ?.let(::SnapshotNodeAdapter)
+            ?: return
+        this.capture = capture
+        this.adapter = adapter
+        nodes = capture.snapshot.nodes
+        usable = nodes.any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }
+        state.update { it.copy(recordingFailure = null) }
+    }
+
+    fun recaptureFailed() {
+        recordingWaitJob?.cancel()
+        state.update {
+            it.copy(
+                phase = GuidedAuthoringPhase.DeadEnd,
+                recordingFailure = null,
+                overlap = null,
+            )
+        }
+    }
+
+    private fun onRecordedTap(event: GuidedTapEvent) {
+        if (capture == null) return
+        screenChangedWhileResolving = false
+        when (val result = GuidedRecordingResolver.resolve(event, nodes)) {
+            GuidedRecordingResolution.NotFound -> {
+                recordingWaitJob?.cancel()
+                recordingWaitJob = viewModelScope.launch {
+                    delay(500)
+                    val changed = screenChangedWhileResolving
+                    screenChangedWhileResolving = false
+                    GuidedRecordingSession.finish()
+                    setRecordingFailure(
+                        if (changed) GuidedRecordingFailure.ScreenChanged
+                        else GuidedRecordingFailure.NoNode
+                    )
+                }
+            }
+
+            is GuidedRecordingResolution.Found -> {
+                val action = if (event.longClick) {
+                    GuidedRuleAction.LongPress
+                } else {
+                    GuidedRuleAction.Click
+                }
+                if (result.nodes.size > 1) {
+                    pendingRecordedAction = action
+                    GuidedRecordingSession.finish()
+                    state.update {
+                        it.copy(recordingFailure = null, overlap = result.nodes)
+                    }
+                } else {
+                    GuidedRecordingSession.finish()
+                    selectNode(result.nodes.first(), action, recorded = true)
+                }
+            }
+        }
+    }
+
+    private fun onScreenChanged() {
+        if (GuidedRecordingSession.phase == GuidedRecordingPhase.Resolving) {
+            screenChangedWhileResolving = true
+        } else {
+            setRecordingFailure(GuidedRecordingFailure.ScreenChanged)
+        }
+    }
+
+    private fun setRecordingFailure(failure: GuidedRecordingFailure) {
+        pendingRecordedAction = null
+        state.update {
+            if (it.phase != GuidedAuthoringPhase.Picking) it
+            else it.copy(recordingFailure = failure, overlap = null)
         }
     }
 
@@ -240,6 +364,12 @@ class GuidedAuthoringViewModel(
     )
 
     fun select(node: NodeInfo) {
+        val action = pendingRecordedAction
+        pendingRecordedAction = null
+        selectNode(node, action ?: GuidedRuleAction.Click, recorded = action != null)
+    }
+
+    private fun selectNode(node: NodeInfo, action: GuidedRuleAction, recorded: Boolean) {
         val adapter = adapter ?: return
         val pick = GuidedPickResolver.resolve(node, adapter)
         val prefill = GuidedPrefillBuilder.build(pick.actable, adapter)
@@ -248,7 +378,7 @@ class GuidedAuthoringViewModel(
             is GuidedPrefillResult.Failure -> emptyList()
         }
         val dynamicText = (prefill as? GuidedPrefillResult.Success)?.prefill?.dynamicText == true
-        val draft = GuidedRuleDraft(target = target)
+        val draft = GuidedRuleDraft(target = target, action = action)
         baseline = draft
         preEditDraft = null
         state.update {
@@ -267,6 +397,8 @@ class GuidedAuthoringViewModel(
                 saveError = false,
                 contextMode = null,
                 overlap = null,
+                recordingFailure = null,
+                recordSpent = it.recordSpent || recorded,
             )
         }
         refreshPreview()
@@ -355,7 +487,10 @@ class GuidedAuthoringViewModel(
         }
     }
 
-    fun dismissOverlap() = state.update { it.copy(overlap = null) }
+    fun dismissOverlap() {
+        pendingRecordedAction = null
+        state.update { it.copy(overlap = null) }
+    }
 
     fun startContext(mode: GuidedContextMode = GuidedContextMode.Inside) =
         state.update { it.copy(contextMode = mode, contextError = false) }
@@ -485,6 +620,7 @@ class GuidedAuthoringViewModel(
         val current = state.value
         if (!canSaveState(current) || persistJob?.isActive == true) return
         state.update { it.copy(saving = true, saveError = false) }
+        val adapter = adapter
         if (current.manual || adapter == null || current.pick == null) {
             saveManual()
             return
@@ -756,6 +892,9 @@ class GuidedAuthoringViewModel(
     fun backToPick() {
         previewJob?.cancel()
         detectionJob?.cancel()
+        recordingWaitJob?.cancel()
+        pendingRecordedAction = null
+        screenChangedWhileResolving = false
         state.update {
             it.copy(
                 phase = GuidedAuthoringPhase.Picking,
@@ -772,6 +911,7 @@ class GuidedAuthoringViewModel(
                 saveError = false,
                 contextMode = null,
                 overlap = null,
+                recordingFailure = null,
             )
         }
         baseline = GuidedRuleDraft()
@@ -790,6 +930,8 @@ class GuidedAuthoringViewModel(
         previewJob?.cancel()
         detectionJob?.cancel()
         persistJob?.cancel()
+        recordingWaitJob?.cancel()
+        GuidedRecordingSession.finish()
         GuidedCaptureStore.clear()
         finished.value = true
     }
@@ -803,6 +945,7 @@ class GuidedAuthoringViewModel(
     }
 
     override fun onCleared() {
+        GuidedRecordingSession.finish()
         GuidedCaptureStore.clear()
     }
 }
