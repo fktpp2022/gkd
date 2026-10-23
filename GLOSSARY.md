@@ -63,11 +63,11 @@ _Avoid_: simple rule
 ### Recording
 
 **Recording session**:
-An authoring session phase in which GKD watches the captured app for exactly one user action, with the rule engine idle. It ends when a demonstration is made, or when the user gives up — with none.
+An authoring session phase in which GKD watches the captured app for one tap or long-press on the captured screen, with the rule engine idle. It ends at the first such event from the captured app — whether or not it yields a demonstration — when a screen change invalidates the capture, or when the user gives up. An authoring session holds at most one demonstration but may run more than one recording session after failed attempts.
 _Avoid_: macro recording, capture mode
 
 **Demonstration**:
-One user-performed tap or long-press on a node in the captured app during a recording session, from which the picked node is derived. At most one per session; never persisted; ceases to exist when the session ends.
+One user-performed tap or long-press on a node in the captured app during a recording session, from which the picked node is derived. A tap from which no node of the authoring capture can be located is not a demonstration. At most one per authoring session; never persisted; ceases to exist when the session ends.
 _Avoid_: record step, user action (in tracker copy), gesture
 
 **Recorded rule**:
