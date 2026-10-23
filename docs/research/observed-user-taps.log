@@ -1,0 +1,45 @@
+--------- beginning of main
+10-23 01:50:57.778  5997  5997 E TapProbe: MARK native tap
+10-23 01:50:58.078  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[NATIVE TAP] time=727691 srcErr=null node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:50:59.072  6006  6006 E TapProbe: MARK long press
+10-23 01:50:59.585  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:50:59.642  5863  5863 E TapProbe: event type=TYPE_VIEW_LONG_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.TextView evtText=[Native Long Press] time=729414 srcErr=null node{text=Native Long Pressed cd=null vid=dev.local.tapprobe:id/native_long cls=android.widget.TextView bounds=Rect(42, 219 - 1038, 354) clickable=true longClickable=true visible=true}
+10-23 01:51:01.147  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_LONG_CLICKED srcResolvable=true node{text=Native Long Pressed cd=null vid=dev.local.tapprobe:id/native_long cls=android.widget.TextView bounds=Rect(42, 219 - 1038, 354) clickable=true longClickable=true visible=true}
+10-23 01:51:01.414  6015  6015 E TapProbe: MARK webview button tap
+10-23 01:51:01.567  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[] time=731335 srcErr=null node{text=Web Tap cd=null vid=web_btn cls=android.widget.Button bounds=Rect(63, 858 - 241, 918) clickable=true longClickable=false visible=true}
+10-23 01:51:02.674  6022  6022 E TapProbe: MARK canvas tap
+10-23 01:51:02.824  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Image evtText=[] time=732611 srcErr=null node{text= cd=null vid=c cls=android.widget.Image bounds=Rect(63, 1047 - 698, 1317) clickable=false longClickable=false visible=true}
+10-23 01:51:03.070  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=Web Tap cd=null vid=web_btn cls=android.widget.Button bounds=Rect(63, 858 - 241, 918) clickable=true longClickable=false visible=true}
+10-23 01:51:03.943  6029  6029 E TapProbe: MARK self-dismiss tap
+10-23 01:51:04.327  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text= cd=null vid=c cls=android.widget.Image bounds=Rect(63, 921 - 698, 1191) clickable=false longClickable=false visible=true}
+10-23 01:51:05.282  6037  6037 E TapProbe: MARK performAction
+10-23 01:51:05.405  5863  5863 E TapProbe: performAction ACTION_CLICK -> true on dev.local.tapprobe:id/native_button
+10-23 01:51:05.419  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=16 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[NATIVE TAP] time=735198 srcErr=null node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:51:05.446  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[SIMULATE GKD PERFORMACTION] time=735200 srcErr=null node{text=SIMULATE GKD PERFORMACTION cd=null vid=dev.local.tapprobe:id/simulate_action cls=android.widget.Button bounds=Rect(42, 354 - 1038, 480) clickable=true longClickable=false visible=true}
+10-23 01:51:06.957  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:51:06.964  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=SIMULATE GKD PERFORMACTION cd=null vid=dev.local.tapprobe:id/simulate_action cls=android.widget.Button bounds=Rect(42, 354 - 1038, 480) clickable=true longClickable=false visible=true}
+10-23 01:51:07.588  6044  6044 E TapProbe: MARK gesture tap
+10-23 01:51:07.694  5863  5863 E TapProbe: gesture dispatched=true at 540.0,156.0
+10-23 01:51:07.724  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[SIMULATE GESTURE TAP] time=737488 srcErr=null node{text=SIMULATE GESTURE TAP cd=null vid=dev.local.tapprobe:id/simulate_gesture cls=android.widget.Button bounds=Rect(42, 480 - 1038, 606) clickable=true longClickable=false visible=true}
+10-23 01:51:07.808  5863  5863 E TapProbe: gesture completed
+10-23 01:51:07.833  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=dev.local.tapprobe evtCls=android.widget.Button evtText=[NATIVE TAP] time=737590 srcErr=null node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:51:09.241  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=SIMULATE GESTURE TAP cd=null vid=dev.local.tapprobe:id/simulate_gesture cls=android.widget.Button bounds=Rect(42, 480 - 1038, 606) clickable=true longClickable=false visible=true}
+10-23 01:51:09.337  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=NATIVE TAP cd=null vid=dev.local.tapprobe:id/native_button cls=android.widget.Button bounds=Rect(42, 93 - 1038, 219) clickable=true longClickable=false visible=true}
+10-23 01:51:13.824  6060  6060 E TapProbe: MARK settings home tap
+10-23 01:51:19.906  5863  5863 E TapProbe: connected
+10-23 01:51:21.329  5863  5863 E TapProbe: event type=TYPE_VIEW_CLICKED action=0 pkg=com.android.settings evtCls=android.widget.LinearLayout evtText=[Network & internet, Mobile, Wi‑Fi, hotspot] time=750889 srcErr=null node{text=null cd=null vid=null cls=android.widget.LinearLayout bounds=Rect(0, 544 - 1080, 736) clickable=true longClickable=false visible=true}
+10-23 01:51:25.707  5863  5863 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=true node{text=null cd=null vid=null cls=android.widget.LinearLayout bounds=Rect(0, 544 - 1080, 736) clickable=true longClickable=false visible=true}
+10-23 01:51:28.128  5863  5863 E TapProbe: connected
+10-23 01:51:39.752  5863  5863 E TapProbe: connected
+10-23 01:51:44.705  6217  6217 E TapProbe: MARK compose 同意 tap
+10-23 01:51:49.393  5863  5863 E TapProbe: connected
+--------- beginning of main
+10-23 02:16:02.566  6915  6915 E TapProbe: MARK compose user tap
+10-23 02:16:06.811  6827  6827 E TapProbe: connected
+10-23 02:16:09.540  6950  6950 E TapProbe: MARK compose ACTION_CLICK
+10-23 02:16:09.705  6827  6827 E TapProbe: trigger: performAction on text=无障碍
+10-23 02:16:09.708  6827  6827 E TapProbe: performActionByText: rootPkg=li.songe.gkd.debug
+10-23 02:16:09.751  6827  6827 E TapProbe: performActionByText ACTION_CLICK -> true on ancestor depth=1 pkg=li.songe.gkd.debug cls=android.view.View vid=null
+10-23 02:16:09.794  6827  6827 E TapProbe: event type=TYPE_VIEW_CLICKED action=16 pkg=li.songe.gkd.debug evtCls=android.view.View evtText=[] time=2239543 srcErr=null node{text=null cd=null vid=null cls=android.view.View bounds=Rect(42, 404 - 1038, 530) clickable=true longClickable=false visible=true}
+10-23 02:16:11.301  6827  6827 E TapProbe: delayed-1500ms type=TYPE_VIEW_CLICKED srcResolvable=false node{text=null cd=null vid=null cls=android.view.View bounds=Rect(42, 404 - 1038, 530) clickable=true longClickable=false visible=true}
+10-23 02:16:13.953  6827  6827 E TapProbe: connected
