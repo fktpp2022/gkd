@@ -1,6 +1,6 @@
 # Guided local-rule authoring — paper prototype
 
-**Status:** prototype v1, October 2026. Review artifact for the UX spec; no production code.
+**Status:** prototype v1, October 2026. Section 9 is the recording amendment (map [#11](https://github.com/fktpp2022/gkd/issues/11)), added October 2026. Review artifact for the UX spec; no production code.
 
 **Scope:** the Android golden path from a visible screen to a saved local rule, plus the states that decide the flow's shape: overlap disambiguation, multiple matches, zero matches, an already-handled target, duplicate saves, re-entry, and dead ends.
 
@@ -443,3 +443,225 @@ Abandon without edits returns directly and deletes the transient capture. An aba
 ## 8. Non-goals of this prototype
 
 Templates/recipes, OR variants, activity-only scope, index/position narrowing, rule-management lists, global rules, multi-step rules, remote-subscription detection, and Desktop as a product authoring surface.
+
+---
+
+## 9. Recording a demonstration — amendment
+
+**Status:** added October 2026 for the [recording effort](https://github.com/fktpp2022/gkd/issues/11). This section adds an alternative to the pick step; it changes nothing downstream of the picked node.
+
+**Inputs:** [recording vocabulary](https://github.com/fktpp2022/gkd/issues/15), [what a demonstration must yield](https://github.com/fktpp2022/gkd/issues/16), [observing non-native taps](https://github.com/fktpp2022/gkd/issues/20), and the [device evidence](https://github.com/fktpp2022/gkd/issues/14).
+
+**In one line:** in a live-capture session the user may perform one tap or long-press in the app; GKD locates that node on the frozen capture and continues exactly as if it had been picked.
+
+### 9.1 Where Record sits, and when it is offered
+
+Record is a single icon in the top bar of S2 — a filled record dot with the accessible name "Record a tap" — not a labelled button.
+
+```
+┌──────────────────────────────────────┐
+│ ←   New rule                      ●  │
+│                                      │
+│   [ frozen screenshot ]              │
+│        ┌──────────┐                  │
+│        │ 跳过 5s  │  ◀ selected      │
+│        └──────────┘                  │
+│                                      │
+│  Tap the element GKD should act on.  │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │ Selected: “跳过 5s”            │  │
+│  │ [ Use this ]  [ Choose again ] │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
+```
+
+- **Only a live-capture session offers it** — the floating-rule-button entry. The app-page and stored-snapshot entries work from a stored snapshot with no guaranteed live foreground app; the Desktop replay has no live app at all. Those sessions never show the icon.
+- It appears on S2 only after node analysis has produced a usable tree. In the S9 dead end there is nothing a demonstration could resolve against, so no icon.
+- It is absent from S3 and later screens: recording substitutes the pick, and the conditions screen has nothing to record.
+- It is hidden once a demonstration has succeeded in this authoring session, even if the user returns to S2 — one demonstration per session. After a failed attempt it returns; a failed attempt is not a demonstration.
+- Tapping it starts recording immediately. There is no confirmation sheet; the recording chip is the explanation, and Stop reverses the mode.
+
+### 9.2 S13 — Recording
+
+The authoring page steps back; the captured app comes forward, live. A small chip floats near the top and is the only GKD surface.
+
+```
+┌──────────────────────────────────────┐
+│   ┌──────────────────────────────┐   │
+│   │ ● Recording a tap — <App>    │   │
+│   │ GKD rules are paused  [Stop] │   │
+│   └──────────────────────────────┘   │
+│                                      │
+│          (live app screen)           │
+│                                      │
+│             ┌──────────┐             │
+│             │ 跳过 5s  │             │
+│             └──────────┘             │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+- The chip is a small floating window; only its surface intercepts touches. The rest of the screen passes every touch to the app, so the demonstration is a real tap or long-press.
+- The title names the captured app. The pause line is the promise: while the chip is live, GKD's rule engine does not act on any rule. It resumes the moment recording ends.
+- Stop is the only GKD control. There is no timer; silence waits indefinitely. Back and Home remain ordinary app/launcher actions.
+- On start, TalkBack announces "Recording. Tap the element in <App>. GKD rules are paused." The chip is one focusable group with a Stop action.
+- The live screen is never marked, outlined, or highlighted. GKD shows no target; the user acts on the real app.
+- Starting recording takes no new screenshot. The authoring capture from entry stays the only reference; if the app had already moved on before the tap, the attempt fails honestly.
+- The first click or long-click event **from the captured app** ends the recording session, usable or not. The event carries which of the two actions was performed.
+- The engine pause is load-bearing, not decoration: on Android 8–11 no service-side signal separates GKD's own click from a user tap, so an engine that kept acting could record itself.
+
+### 9.3 Return, ambiguity, and the conditions screen
+
+When the session ends, GKD brings the authoring page forward over the frozen capture. There is no notification and no manual return step.
+
+- The event's node is located **on the authoring capture**, never on the live screen: source view id → source text/description → event text items within the source bounds, then the existing actable climb and prefill ladder.
+- No capture node is found → S14, "Nothing was recorded".
+- Several capture nodes match → S2b "Which element?" over the authoring page; choosing one continues to S3. Cancelling returns to S2's normal pick state; the attempt was not a demonstration, so the Record icon returns.
+- One capture node resolves → S3, with the target ringed as after a pick.
+
+The conditions screen is the existing S3, unchanged except that the action row arrives prefilled from the event:
+
+```
+┌──────────────────────────────────────┐
+│ ←   New rule for <App>          ⋮    │
+│                                      │
+│  [ screenshot thumbnail, matches     │
+│    highlighted, picked one ringed ]  │
+│                                      │
+│  Action                              │
+│  [ Tap ]   [ Long-press ✓ ]          │
+│                                      │
+│  When this appears:                  │
+│  ┌────────────────────────────────┐  │
+│  │ Text    [ is ▾ ] [ 跳过 5s   ] │  │
+│  └────────────────────────────────┘  │
+│  + Add condition                     │
+│  + Add context                       │
+│                                      │
+│  ✓ 1 element matches on this screen  │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │            Save                │  │
+│  └────────────────────────────────┘  │
+└──────────────────────────────────────┘
+```
+
+- A tap prefills **Tap**; a long-press prefills **Long-press**. The row stays editable, and changing it updates the auto-suggested name until the name is edited — exactly as after a pick.
+- Nothing on the page — no badge, no toast, no extra row — says the target came from a demonstration. The saved rule is the same kind of rule.
+- Everything downstream is unchanged: existing-rule banner, match count, broad/narrow, zero-match save, duplicate check, save/error/discard, limits option, raw fallback.
+- Back from S3 without edits returns to S2 with the demonstration spent; the Record icon stays hidden. With edits, the usual discard prompt applies. The user may still pick a node on the capture instead — that is a normal pick, not a second demonstration.
+
+### 9.4 S14 — Nothing was recorded
+
+Inline on S2, below the still-visible frozen screenshot; the pick hint is replaced.
+
+```
+┌──────────────────────────────────────┐
+│ ←   New rule                         │
+│                                      │
+│          [ frozen screenshot ]       │
+│                                      │
+│  Nothing was recorded.               │
+│  You stopped before GKD saw a tap.   │
+│  Some apps don't report taps;        │
+│  picking on this screen still works. │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │        Pick it instead         │  │
+│  └────────────────────────────────┘  │
+│  [ Record again ]      [ Cancel ]    │
+│                                      │
+└──────────────────────────────────────┘
+```
+
+- The cause line adapts:
+  - Stopped with no event: `You stopped before GKD saw a tap.` followed by the helper `Some apps don't report taps; picking on this screen still works.`
+  - An event that identifies no capture node, with no screen change: `That tap didn't match anything on this screen.`
+- The helper is the one place the feature's known blind spot is stated in the flow. It is honest without naming Compose: some apps never report taps, and picking remains available.
+- **Pick it instead** returns to S2's normal pick state; the Record icon returns because no demonstration occurred.
+- **Record again** starts a fresh recording session against the same capture.
+- **Cancel** ends the authoring session; there are no edits, so no discard prompt.
+- The Record icon is hidden while this state is shown; its actions are the two ways forward.
+- This state never appears on its own. Silence does not time out; it requires Stop or an unusable event.
+
+### 9.5 S15 — Screen changed
+
+Triggered by a pre-tap window-state change in the captured app, or by a failed tap whose own navigation changed the screen. A window change caused by a usable tap is the demonstration's result, not an invalidation.
+
+```
+┌──────────────────────────────────────┐
+│ ←   New rule                         │
+│                                      │
+│          [ frozen screenshot ]       │
+│                                      │
+│  The screen changed.                 │
+│  Nothing was recorded.               │
+│                                      │
+│  ┌────────────────────────────────┐  │
+│  │ Capture this screen and record │  │
+│  └────────────────────────────────┘  │
+│  [ Pick on the captured screen ]     │
+│  [ Cancel ]                          │
+└──────────────────────────────────────┘
+```
+
+- **Capture this screen and record again** replaces the authoring capture with the app's current screen and starts a new recording session. If that capture fails, the existing S9 dead end applies.
+- **Pick on the captured screen** keeps the old capture and enters picking — the same stale screenshot the page is already showing. The attempt was not a demonstration; the Record icon returns.
+- **Cancel** ends the authoring session; no discard prompt.
+- The Record icon is hidden while this state is shown.
+- The copy is deliberately generic: pre-tap drift and a tap that navigated before it could be used are the same dead end, and the user's choice is the same.
+
+### 9.6 App scope and other apps
+
+- A recording session is scoped to the captured app's package. Only click and long-click events from that app end it.
+- A tap in another app is ignored: it does not end the attempt, does not record, and does not consume the demonstration. The chip stays visible and still names the captured app.
+- Leaving the captured app (Home, recents, another app) leaves the session live. The user returns to the captured app to demonstrate, or taps Stop.
+- Because the pause is global while the chip is live, Stop is always one tap away and the chip is never hidden.
+- The floating rule button is hidden while recording; the chip is the only GKD surface.
+- A screen change in the captured app before the tap ends the attempt with S15, wherever the user is; the authoring page returns.
+
+### 9.7 State machine additions
+
+| State | Entry | Primary action | Exits |
+| --- | --- | --- | --- |
+| Recording | S2 record icon, live capture only | Tap/long-press the target in the captured app | S3 Conditions, S14 NothingRecorded, S15 ScreenChanged |
+| NothingRecorded | Stop with no event; an event identifying no capture node | Pick it instead / Record again / Cancel | S2 Picking, Recording, Idle |
+| ScreenChanged | Pre-tap window change; failed tap that changed the screen | Capture this screen and record again / Pick on the captured screen / Cancel | Recording (new capture), S2 Picking, Idle |
+
+Recording is a phase inside the authoring session: the authoring page stays in the back stack, the engine is idle for the whole phase, and the one-demonstration budget belongs to the authoring session.
+
+### 9.8 Copy deck additions
+
+| Context | Copy | Note |
+| --- | --- | --- |
+| Record action | ● | Icon only; content description "Record a tap" |
+| Recording title | Recording a tap — %1$s | Captured app label |
+| Recording pause | GKD rules are paused | While the chip is live |
+| Recording stop | Stop | Only GKD control |
+| Recording announced | Recording. Tap the element in %1$s. GKD rules are paused. | TalkBack, on start |
+| Nothing title | Nothing was recorded. | |
+| Nothing cause (stopped) | You stopped before GKD saw a tap. | |
+| Nothing helper | Some apps don't report taps; picking on this screen still works. | Under the stopped cause only |
+| Nothing cause (no node) | That tap didn't match anything on this screen. | No helper |
+| Nothing actions | Pick it instead / Record again / Cancel | Pick is primary |
+| Changed title | The screen changed. | |
+| Changed body | Nothing was recorded. | |
+| Changed actions | Capture this screen and record again / Pick on the captured screen / Cancel | Recapture is primary |
+| Conditions after a demonstration | No new copy | Prefilled action row is the only trace |
+
+### 9.9 What to react to
+
+1. **Icon-only entry.** Is a top-bar dot discoverable enough, or does the pick hint need one line pointing at it?
+2. **The honest helper.** "Some apps don't report taps; picking on this screen still works." Is that the right amount of truth, or too technical for a failure state?
+3. **No success cue.** The ringed target and prefilled action row are the only trace of the demonstration. Does the return from the live app read without a transient "Tap recorded."?
+4. **The global pause across other apps.** Taps elsewhere are ignored and the chip is always visible; is that enough protection for a session that can outlive the captured app's foreground time?
+5. **Recapture replaces the capture.** S15 keeps the old capture pickable while the primary action discards it; is that the right balance?
+
+### 9.10 Non-goals of this amendment
+
+- Compose and custom-drawn observation; those apps reach S14 honestly.
+- Multi-action or multi-rule recording, sequences, and replay.
+- Recording from stored snapshots, the app page, or Desktop.
+- A provenance field, badge, toast, or any rule-level difference after saving.
+- Recording as an accessibility path; the list pick remains the non-visual route.
