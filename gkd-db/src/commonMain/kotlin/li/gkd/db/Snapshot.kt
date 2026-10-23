@@ -38,6 +38,9 @@ data class Snapshot(
         @Query("SELECT * FROM snapshot ORDER BY id DESC")
         fun query(): Flow<List<Snapshot>>
 
+        @Query("SELECT * FROM snapshot WHERE app_id = :appId ORDER BY id DESC LIMIT 1")
+        suspend fun queryLatest(appId: String): Snapshot?
+
         @Query("UPDATE snapshot SET github_asset_id=null WHERE id = :id")
         suspend fun deleteGithubAssetId(id: Long)
 

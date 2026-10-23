@@ -6,6 +6,7 @@ import li.gkd.app.resources.*
 import li.gkd.app.service.ActivityService
 import li.gkd.app.service.ButtonService
 import li.gkd.app.service.EventService
+import li.gkd.app.service.GuidedRuleButtonService
 import li.gkd.app.service.HttpService
 import li.gkd.app.service.ScreenshotService
 import li.gkd.app.service.TrackService
@@ -25,6 +26,7 @@ enum class ForegroundNotificationKey(
     Activity(id = 106),
     Event(id = 107),
     Track(id = 108),
+    Guided(id = 109),
 }
 
 enum class PostedNotificationKey(
@@ -108,6 +110,14 @@ object NotificationCatalog {
         text = Res.string.snapshot_button_notification_description.getSync(),
         uri = "gkd://page/1",
         stopService = ButtonService::class,
+    )
+
+    fun guidedRule() = ForegroundNotification(
+        key = ForegroundNotificationKey.Guided,
+        title = Res.string.guided_button_enabled.getSync(),
+        text = Res.string.guided_button_notification_description.getSync(),
+        uri = "gkd://page/1",
+        stopService = GuidedRuleButtonService::class,
     )
 
     fun http(port: Int, localNetworkIps: List<String> = emptyList()) = ForegroundNotification(

@@ -20,3 +20,5 @@ actual fun UiHost.changeAutomatorMode(mode: AutomatorMode) {
     DesktopRuntime.requireCurrent().services.setEnabled(SimulatedService.Accessibility, false)
     DesktopRuntime.requireCurrent().services.setEnabled(SimulatedService.Automation, false)
 }
+
+actual fun UiHost.finishGuidedAuthoring() {}

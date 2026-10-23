@@ -19,7 +19,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -33,6 +37,7 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import li.gkd.app.app.ActivityNames.getShowActivityId
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.network.AppLinks
 import li.gkd.app.resources.*
 import li.gkd.app.time.format
@@ -52,6 +57,7 @@ fun GkSnapshotActionsSheet(
     appName: String,
     sheetState: SheetState,
     onDismissRequest: () -> Unit,
+    onCreateRule: () -> Unit,
     onShare: () -> Unit,
     shareEnabled: Boolean,
     onSaveToDownloads: () -> Unit,
@@ -63,6 +69,12 @@ fun GkSnapshotActionsSheet(
     fun perform(action: () -> Unit) {
         onDismissRequest()
         action()
+    }
+    var createRuleUsable by remember(snapshot.id) {
+        mutableStateOf(snapshot.appId.isNotBlank())
+    }
+    LaunchedEffect(snapshot.id) {
+        createRuleUsable = GuidedSnapshotCapture.isUsable(snapshot)
     }
     GkModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -81,6 +93,14 @@ fun GkSnapshotActionsSheet(
                 appName,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            SnapshotActionRow(
+                icon = GkIcons.Rule,
+                title = stringResource(Res.string.guided_create_rule),
+                subtitle = if (createRuleUsable) null else stringResource(Res.string.guided_dead_end),
+                enabled = createRuleUsable,
+                onClick = { perform(onCreateRule) },
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             SnapshotActionRow(
                 icon = if (snapshot.githubAssetId == null) GkIcons.Link else GkIcons.ContentCopy,
                 title = if (snapshot.githubAssetId == null) {

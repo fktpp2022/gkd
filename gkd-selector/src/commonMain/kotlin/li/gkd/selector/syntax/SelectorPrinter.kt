@@ -249,7 +249,7 @@ internal object SelectorPrinter {
     }
 }
 
-private fun escapeString(value: String, wrapChar: Char = '"'): String {
+internal fun escapeString(value: String, wrapChar: Char = '"'): String {
     val result = StringBuilder(value.length + 2)
     result.append(wrapChar)
     var index = 0

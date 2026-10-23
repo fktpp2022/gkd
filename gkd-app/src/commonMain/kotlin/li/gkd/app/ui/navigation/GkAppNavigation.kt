@@ -10,6 +10,7 @@ import li.gkd.app.ui.crash.CrashReportPage
 import li.gkd.app.ui.home.ActionToastPage
 import li.gkd.app.ui.home.BlockA11ySetupPage
 import li.gkd.app.ui.home.HomePage
+import li.gkd.app.ui.authoring.GuidedAuthoringPage
 import li.gkd.app.ui.home.NotificationTextPage
 import li.gkd.app.ui.log.A11yEventLogPage
 import li.gkd.app.ui.log.ActivityLogPage
@@ -65,6 +66,7 @@ fun GkAppNavigation(
                 is SnapshotPreviewRoute -> SnapshotPreviewPage(host, route)
                 is WebViewRoute -> WebViewPage(route, host)
                 is ImagePreviewRoute -> ImagePreviewPage(host, route)
+                is GuidedAuthoringRoute -> GuidedAuthoringPage(host, route)
 
                 ActivityLogRoute -> ActivityLogPage()
                 A11yEventLogRoute -> A11yEventLogPage()

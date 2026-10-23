@@ -19,6 +19,7 @@ import li.gkd.app.ui.component.gkTopAppBarScroll
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.error.messageResource
 import li.gkd.app.resources.*
 import li.gkd.app.rule.RuleDisplayMode
@@ -56,6 +57,7 @@ import li.gkd.app.ui.component.rememberRuleControlEnvironment
 import li.gkd.app.ui.component.rememberRuleListFocus
 import li.gkd.app.ui.navigation.ActionLogRoute
 import li.gkd.app.ui.navigation.AppConfigRoute
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.SubsAppGroupListRoute
 import li.gkd.app.ui.navigation.SubsGlobalGroupListRoute
 import li.gkd.app.ui.navigation.UpsertRuleGroupRoute
@@ -70,6 +72,7 @@ import li.gkd.app.util.ToastUtils
 import li.gkd.app.util.copyText
 import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
+import li.gkd.db.Db
 import li.gkd.db.SubscriptionIds
 
 @Composable
@@ -329,6 +332,22 @@ fun AppConfigPage(
                                 }
                             }
                         }
+                        GkIconButton(
+                            imageVector = GkIcons.Rule,
+                            contentDescription = stringResource(Res.string.guided_create_rule),
+                            onClick = {
+                                scope.launchUi {
+                                    val latest = Db.snapshotDao.queryLatest(appId)
+                                    if (latest != null && GuidedSnapshotCapture.open(latest)) {
+                                        mainVm.navigator.navigate(GuidedAuthoringRoute())
+                                    } else {
+                                        mainVm.navigator.navigate(
+                                            GuidedAuthoringRoute(startManualAppId = appId)
+                                        )
+                                    }
+                                }
+                            },
+                        )
                         GkIconButton(
                             imageVector = GkIcons.History,
                             onClick = {

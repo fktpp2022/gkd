@@ -3,6 +3,7 @@ package li.gkd.app.platform.service
 import li.gkd.app.service.ActivityService
 import li.gkd.app.service.ButtonService
 import li.gkd.app.service.EventService
+import li.gkd.app.service.GuidedRuleButtonService
 import li.gkd.app.service.HttpService
 import li.gkd.app.service.StatusService
 import li.gkd.app.settings.SettingsRepository
@@ -18,6 +19,12 @@ object ServiceController {
         enabled = enabled,
         start = ButtonService::start,
         stop = ButtonService::stop,
+    )
+
+    fun setGuidedRuleButtonEnabled(enabled: Boolean) = setEnabled(
+        enabled = enabled,
+        start = GuidedRuleButtonService::start,
+        stop = GuidedRuleButtonService::stop,
     )
 
     fun setActivityMonitorEnabled(enabled: Boolean) = setEnabled(

@@ -72,6 +72,7 @@ import coil3.request.ImageRequest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import li.gkd.app.app.ActivityNames.getShowActivityId
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.model.date
 import li.gkd.app.network.AppLinks
 import li.gkd.app.resources.*
@@ -92,6 +93,7 @@ import li.gkd.app.ui.component.GkPageBottomSpace
 import li.gkd.app.ui.component.GkRetainedSheet
 import li.gkd.app.ui.component.GkScaffold
 import li.gkd.app.ui.image.appImageLoader
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.SnapshotPreviewRoute
 import li.gkd.app.snapshot.SnapshotDisplayMode
 import li.gkd.app.model.findOption
@@ -493,6 +495,15 @@ fun SnapshotPage(
             appName = appNames[snapshot.appId] ?: snapshot.appId,
             sheetState = sheetState,
             onDismissRequest = dismiss,
+            onCreateRule = {
+                actionScope.launchUi {
+                    if (GuidedSnapshotCapture.open(snapshot)) {
+                        mainVm.navigator.navigate(GuidedAuthoringRoute())
+                    } else {
+                        ToastUtils.show(getString(Res.string.guided_dead_end))
+                    }
+                }
+            },
             onShare = { vm.shareSnapshots(listOf(snapshot), host.snapshotPlatformActions()) },
             shareEnabled = shareProgress == null,
             onSaveToDownloads = { actions.saveToDownloads(snapshot) },

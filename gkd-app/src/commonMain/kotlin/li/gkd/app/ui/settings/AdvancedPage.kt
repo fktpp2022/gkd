@@ -18,6 +18,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import li.gkd.app.ui.component.gkTopAppBarScroll
 import androidx.compose.ui.text.input.KeyboardType
@@ -70,6 +73,9 @@ fun AdvancedPage(
 
     val buttonServiceRunning: Boolean = snapshotButtonRunning()
 
+    val guidedButtonServiceRunning: Boolean = guidedButtonRunning()
+    var showGuidedIntro by remember { mutableStateOf(false) }
+
     val activityServiceRunning: Boolean = activityMonitorRunning()
 
     val eventServiceRunning: Boolean = eventMonitorRunning()
@@ -77,6 +83,27 @@ fun AdvancedPage(
     val trackServiceRunning: Boolean = trackServiceRunning()
 
     val showTrackNotice by vm.showTrackNotice.collectAsStateWithLifecycle()
+    if (showGuidedIntro)
+        GkAlertDialog(
+            onDismissRequest = { showGuidedIntro = false },
+            title = { Text(stringResource(Res.string.guided_first_run_title)) },
+            text = { Text(stringResource(Res.string.guided_first_run_message)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        showGuidedIntro = false
+                        host.setGuidedRuleButtonEnabled(true)
+                    }
+                ) {
+                    Text(stringResource(Res.string.guided_turn_on))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showGuidedIntro = false }) {
+                    Text(stringResource(Res.string.guided_not_now))
+                }
+            },
+        )
     if (showTrackNotice)
         GkAlertDialog(
             onDismissRequest = { vm.setShowTrackNotice(false) },
@@ -188,6 +215,15 @@ fun AdvancedPage(
                 checked = buttonServiceRunning,
                 onCheckedChange = host::setSnapshotButtonEnabled,
             )
+            GkTextSwitch(
+                title = stringResource(Res.string.guided_button_label),
+                subtitle = stringResource(Res.string.guided_button_description),
+                checked = guidedButtonServiceRunning,
+                onCheckedChange = { enabled ->
+                    if (enabled) showGuidedIntro = true
+                    else host.setGuidedRuleButtonEnabled(false)
+                },
+            )
             GkSettingItem(
                 title = stringResource(Res.string.snapshot_settings),
                 onClick = { mainVm.navigator.navigate(SnapshotSettingsRoute) },
@@ -261,6 +297,8 @@ fun AdvancedPage(
 
 expect fun UiHost.setSnapshotButtonEnabled(enabled: Boolean)
 
+expect fun UiHost.setGuidedRuleButtonEnabled(enabled: Boolean)
+
 expect fun UiHost.setHttpServiceEnabled(enabled: Boolean)
 
 expect fun UiHost.httpServerPortChanged()
@@ -276,6 +314,8 @@ expect fun UiHost.setTrackServiceEnabled(enabled: Boolean)
 @Composable expect fun httpServerAddresses(): List<String>
 
 @Composable expect fun snapshotButtonRunning(): Boolean
+
+@Composable expect fun guidedButtonRunning(): Boolean
 
 @Composable expect fun activityMonitorRunning(): Boolean
 

@@ -25,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import li.gkd.app.app.ActivityNames.getShowActivityId
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.resources.*
 import li.gkd.app.state.Loadable
 import li.gkd.app.ui.MainViewModel
@@ -35,6 +36,7 @@ import li.gkd.app.ui.component.GkRetainedSheet
 import li.gkd.app.ui.component.LocalEditorWindowInsets
 import li.gkd.app.ui.image.appImageLoader
 import li.gkd.app.ui.navigation.AppRoute
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.ImagePreviewItem
 import li.gkd.app.ui.navigation.ImagePreviewRoute
 import li.gkd.app.ui.navigation.SnapshotPageRoute
@@ -42,6 +44,8 @@ import li.gkd.app.ui.navigation.SnapshotPreviewRoute
 import li.gkd.app.ui.page.GkImagePreviewContent
 import li.gkd.app.ui.platform.GkSystemBars
 import li.gkd.app.ui.platform.UiHost
+import li.gkd.app.ui.share.launchUi
+import li.gkd.app.util.ToastUtils
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -54,6 +58,7 @@ fun SnapshotPreviewPage(
     val replaceRoute: (AppRoute) -> Unit = { mainVm.navigator.navigate(it, true) }
     val vm = viewModel { SnapshotViewModel() }
     val shareProgress by vm.shareProgress.collectAsStateWithLifecycle()
+    val guidedDeadEnd = stringResource(Res.string.guided_dead_end)
 
     val loadableState by vm.uiState.collectAsStateWithLifecycle()
     val state = loadableState.value
@@ -168,6 +173,15 @@ fun SnapshotPreviewPage(
                         appName = catalog.snapshot?.apps?.get(snapshot.appId)?.name ?: snapshot.appId,
                         sheetState = sheetState,
                         onDismissRequest = dismiss,
+                        onCreateRule = {
+                            vm.scope.launchUi {
+                                if (GuidedSnapshotCapture.open(snapshot)) {
+                                    mainVm.navigator.navigate(GuidedAuthoringRoute())
+                                } else {
+                                    ToastUtils.show(guidedDeadEnd)
+                                }
+                            }
+                        },
                         onShare = { vm.shareSnapshots(listOf(snapshot), host.snapshotPlatformActions()) },
                         shareEnabled = shareProgress == null,
                         onSaveToDownloads = { actions.saveToDownloads(snapshot) },

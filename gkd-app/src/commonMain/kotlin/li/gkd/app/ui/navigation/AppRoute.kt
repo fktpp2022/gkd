@@ -85,6 +85,12 @@ data object ActivityLogRoute : AppRoute
 data object AboutRoute : AppRoute
 
 @Serializable
+data class GuidedAuthoringRoute(
+    val fromOverlay: Boolean = false,
+    val startManualAppId: String? = null,
+) : AppRoute
+
+@Serializable
 data object AdvancedPageRoute : AppRoute
 
 @Serializable
@@ -150,6 +156,7 @@ data class UpsertRuleGroupRoute(
     val groupKey: Int? = null,
     val appId: String? = null,
     val forward: Boolean = false,
+    val initialText: String? = null,
 ) : AppRoute {
     override val transition get() = RouteTransition.Editor
 }

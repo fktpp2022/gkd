@@ -13,3 +13,7 @@ actual fun UiHost.setStatusServiceEnabled(enabled: Boolean) {
 actual fun UiHost.changeAutomatorMode(mode: AutomatorMode) {
     mainVm.androidState.updateAutomatorMode(mode)
 }
+
+actual fun UiHost.finishGuidedAuthoring() {
+    finish()
+}
