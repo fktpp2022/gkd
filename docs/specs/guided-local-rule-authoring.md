@@ -508,7 +508,7 @@ Parse-back requires a read-only selector AST (or a restricted parser sharing the
 
 ### 8.8 Recorded target resolution
 
-The demonstration must yield a node of the **pre-tap authoring capture** plus the demonstrated action; anything less is A16. The capture is taken once at entry and is the only reference. There is no rolling capture, no tap-time tree, and no matching against the live screen after navigation.
+The demonstration must yield a node of the **pre-tap authoring capture** plus the demonstrated action. Anything less fails: A16 when the capture is intact, A17 when the screen changed first. The capture is taken once at entry and is the only reference. There is no rolling capture, no tap-time tree, and no matching against the live screen after navigation.
 
 Resolution order:
 
@@ -533,7 +533,7 @@ The demonstration contributes exactly the picked node and the action, nothing el
 
 Recording v1 uses the accessibility click-event path only:
 
-- Native Views and WebView emit `TYPE_VIEW_CLICKED` / `TYPE_VIEW_LONG_CLICKED` for user taps; device evidence covers both, with WebView provider variation remaining residual.
+- Native Views emit `TYPE_VIEW_CLICKED` / `TYPE_VIEW_LONG_CLICKED` for user taps. WebView taps also emit a click event and expose the DOM id; WebView long-press and provider variation remain device-test items, not assumptions.
 - Compose user taps emit no click event at all, and a custom-drawn tap emits one only if the app calls `performClick()`. A tap that removes its own target emits nothing. These reach A16 honestly; picking on the same capture still works.
 - No privileged raw-input observation, touch-exploration hover, tree-diff inference, or typed content-change path ships in v1. Each either rewrites the demonstrated gesture, requires privileged reach, or fails to name the node.
 - The event source can be a bare container. That is why step 3 of 8.8 uses event text within the source bounds; the source node alone is not trusted as the target.
@@ -684,7 +684,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 | Save failure | A13 | Draft preserved; retry |
 | Abandon with edits | A12 | Discard confirmation |
 | Limits option | A3 options | Off by default; helper states the 10 s/one-tap consequence |
-| No tap event, or a Compose/custom-drawn/self-deleting tap | A16 | Honest "nothing was recorded"; no timeout; picking remains available |
+| Stop with no tap event, including Compose/custom-drawn/self-deleting taps | A16 | Honest "nothing was recorded"; no timeout before Stop; picking remains available |
 | Event identifies no capture node | A16 | Never invents a node; same fallback |
 | Screen changed before the tap, or a failed tap navigated | A17 | Recapture or pick on the old capture; no silent matching after navigation |
 | Tap in another app during recording | No surface change | Ignored; the chip stays; the attempt is not consumed |
@@ -832,7 +832,7 @@ Deferred past recording v1: multi-action/multi-rule sessions; actions other than
 | Compose/custom-drawn user taps emit no click event | Recording sees nothing; the target cannot be identified | Honest A16; picking remains available; scope stated in 8.9; no fake success |
 | GKD acts during a recording phase | GKD's own clicks could be recorded; on Android 8–11 nothing else separates them | Engine idle for the whole phase; device-test on Android 8–11 and current versions |
 | Event source is a bare container | Source node has no label, so the target cannot be named from the source alone | Event-text resolution within source bounds (8.8); device-test with a Settings row |
-| OEM/vendor ROM and WebView provider variation | Taps may be missed or shaped differently | Device-test matrix; treat as residual, not a silent assumption |
+| OEM/vendor ROM and WebView provider variation | Taps or long-presses may be missed or shaped differently; WebView long-press is not yet verified | Device-test matrix; treat as residual, not a silent assumption |
 | Icon-only Record entry is missed | Users never discover recording | Device-test observation; one-line hint is a follow-up only if missed |
 | Screen changes before the tap | The pre-tap capture no longer describes the demonstrated screen | A17 with recapture or picking on the old capture; no silent matching |
 | Recording phase outlives the captured app's foreground time | The global pause and the chip must remain reachable | Chip never hidden; Stop one tap away; engine resumes on any exit from the phase |
@@ -890,8 +890,8 @@ Deferred past recording v1: multi-action/multi-rule sessions; actions other than
 - [ ] End to end: Record → demonstrate a tap → save → reopen the target app → the engine fires the saved rule.
 - [ ] Engine idle: while recording, no rule acts on any app; the engine resumes when recording ends.
 - [ ] Native-View app: a tap lands on A3; a long-press lands on A3 with Long-press prefilled and editable.
-- [ ] WebView: a user tap lands on A3; record the WebView provider/version because provider variation is residual.
-- [ ] Compose plain-button tap: no click event; Stop or the ending state lands on A16, and picking on the capture still works.
+- [ ] WebView: a user tap lands on A3; a long-press lands on A3 with Long-press prefilled, or reaches A16 if the provider emits no long-click event. Record the provider/version because variation is residual.
+- [ ] Compose plain-button tap: no click event; Stop lands on A16, and picking on the capture still works.
 - [ ] Self-deleting target: the tap emits nothing; Stop lands on A16.
 - [ ] Bare-container source: event text within the source bounds resolves the intended capture node (for example a labeled Settings row child).
 - [ ] Ambiguous event: multiple capture candidates open A2b; cancelling returns to picking and the Record icon returns.
