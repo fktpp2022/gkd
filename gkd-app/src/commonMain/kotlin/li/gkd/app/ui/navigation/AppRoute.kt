@@ -157,6 +157,7 @@ data class UpsertRuleGroupRoute(
     val appId: String? = null,
     val forward: Boolean = false,
     val initialText: String? = null,
+    val guided: Boolean = false,
 ) : AppRoute {
     override val transition get() = RouteTransition.Editor
 }

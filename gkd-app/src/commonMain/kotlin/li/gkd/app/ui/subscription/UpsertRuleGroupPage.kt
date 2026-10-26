@@ -2,7 +2,9 @@ package li.gkd.app.ui.subscription
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.MaterialTheme
@@ -69,40 +71,50 @@ fun UpsertRuleGroupPage(
                     errorIndicatorColor = Color.Transparent,
                     disabledIndicatorColor = Color.Transparent,
                 )
-            Box(modifier = Modifier.scaffoldPadding(paddingValues).fillMaxSize()) {
-                CompositionLocalProvider(
-                    LocalTextStyle provides MaterialTheme.typography.bodyLarge
-                ) {
-                    val modifier =
-                        Modifier.autoFocus(immediateFocus = true).fillMaxSize().then(inputInsets)
-                    TextField(
-                        value = text,
-                        onValueChange = vm::setDraft,
-                        modifier = modifier,
-                        shape = RectangleShape,
-                        colors = textColors,
-                        visualTransformation = getJson5Transformation(LocalDarkTheme.current),
-                        placeholder = {
-                            Text(
-                                text =
-                                    if (vm.isApp) stringResource(Res.string.app_rule_input_hint)
-                                    else stringResource(Res.string.global_rule_input_hint)
-                            )
-                        },
+            Column(modifier = Modifier.scaffoldPadding(paddingValues).fillMaxSize()) {
+                if (route.guided) {
+                    Text(
+                        text = stringResource(Res.string.guided_raw_note),
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
                 }
-                if (text.isNotEmpty()) {
-                    Text(
-                        text = text.length.toString(),
-                        modifier =
-                            Modifier.padding(8.dp)
-                                .align(Alignment.TopEnd)
-                                .clip(MaterialTheme.shapes.extraSmall)
-                                .background(MaterialTheme.colorScheme.surfaceContainer)
-                                .padding(horizontal = 2.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.tertiary,
-                    )
+                Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                    CompositionLocalProvider(
+                        LocalTextStyle provides MaterialTheme.typography.bodyLarge
+                    ) {
+                        val modifier =
+                            Modifier.autoFocus(immediateFocus = true).fillMaxSize().then(inputInsets)
+                        TextField(
+                            value = text,
+                            onValueChange = vm::setDraft,
+                            modifier = modifier,
+                            shape = RectangleShape,
+                            colors = textColors,
+                            visualTransformation = getJson5Transformation(LocalDarkTheme.current),
+                            placeholder = {
+                                Text(
+                                    text =
+                                        if (vm.isApp) stringResource(Res.string.app_rule_input_hint)
+                                        else stringResource(Res.string.global_rule_input_hint)
+                                )
+                            },
+                        )
+                    }
+                    if (text.isNotEmpty()) {
+                        Text(
+                            text = text.length.toString(),
+                            modifier =
+                                Modifier.padding(8.dp)
+                                    .align(Alignment.TopEnd)
+                                    .clip(MaterialTheme.shapes.extraSmall)
+                                    .background(MaterialTheme.colorScheme.surfaceContainer)
+                                    .padding(horizontal = 2.dp),
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
                 }
             }
         }
