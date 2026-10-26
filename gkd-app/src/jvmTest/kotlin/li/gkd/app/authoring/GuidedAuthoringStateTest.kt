@@ -283,9 +283,8 @@ class GuidedAuthoringStateTest {
     @Test
     fun savePlanCarriesScopeAndDuplicateResult() {
         val rule = testAppRule(key = 4, matches = listOf("[text=\"OK\"]"))
-        val candidates = GuidedRuleCandidates.fromGroup(
-            testAppGroup(name = "My rules", rules = listOf(rule)),
-            "My rules",
+        val candidates = testCandidates(
+            listOf(testAppGroup(name = "My rules", rules = listOf(rule))),
         )
         val plan = assertIs<GuidedSavePlanResult.Ready>(
             GuidedSavePlanner.plan(
