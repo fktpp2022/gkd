@@ -87,12 +87,12 @@ class GuidedRuleButtonService : OverlayWindowService(
                 tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
             )
         } else {
-            GuidedRecordingChip(context)
+            GuidedRecordingChip(context, canStop = status.canStop)
         }
     }
 
     @Composable
-    private fun GuidedRecordingChip(context: GuidedRecordingContext) {
+    private fun GuidedRecordingChip(context: GuidedRecordingContext, canStop: Boolean) {
         val appName = context.appName ?: context.appId
         val description = stringResource(Res.string.guided_recording_announcement, appName)
         Surface(
@@ -104,7 +104,14 @@ class GuidedRuleButtonService : OverlayWindowService(
             color = MaterialTheme.colorScheme.surfaceContainerHigh,
             tonalElevation = 3.dp,
         ) {
-            Column(Modifier.padding(start = 12.dp, top = 8.dp, end = 12.dp, bottom = 0.dp)) {
+            Column(
+                Modifier.padding(
+                    start = 12.dp,
+                    top = 8.dp,
+                    end = 12.dp,
+                    bottom = if (canStop) 0.dp else 8.dp,
+                ),
+            ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -124,8 +131,10 @@ class GuidedRuleButtonService : OverlayWindowService(
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
-                TextButton(onClick = { GuidedRecordingSession.stop() }) {
-                    Text(stringResource(Res.string.guided_recording_stop))
+                if (canStop) {
+                    TextButton(onClick = { GuidedRecordingSession.stop() }) {
+                        Text(stringResource(Res.string.guided_recording_stop))
+                    }
                 }
             }
         }
