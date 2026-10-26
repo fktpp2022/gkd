@@ -211,6 +211,7 @@ fun GuidedAuthoringPage(
                 groupKey = target.groupKey,
                 appId = if (target.global) null else appId,
                 initialText = if (target.groupKey == null) vm.rawDraftText() else null,
+                guided = true,
             ),
         )
     }
@@ -303,6 +304,7 @@ fun GuidedAuthoringPage(
                                 UpsertRuleGroupRoute(
                                     subsId = SubscriptionIds.LOCAL,
                                     appId = state.appId,
+                                    guided = true,
                                 ),
                             )
                         } else {
@@ -324,6 +326,7 @@ fun GuidedAuthoringPage(
                                         UpsertRuleGroupRoute(
                                             subsId = SubscriptionIds.LOCAL,
                                             appId = state.appId,
+                                            guided = true,
                                         ),
                                     )
                                 } else {
@@ -492,7 +495,13 @@ fun GuidedAuthoringPage(
             GkAlertDialog(
                 onDismissRequest = vm::cancelBroadConfirm,
                 title = {
-                    Text(stringResource(Res.string.guided_duplicate_title))
+                    Text(
+                        pluralStringResource(
+                            Res.plurals.guided_match_count,
+                            broadState.plan.matchCount,
+                            broadState.plan.matchCount.toString(),
+                        ),
+                    )
                 },
                 text = {
                     Text(
@@ -910,7 +919,7 @@ private fun GuidedEditingContent(
                 zeroMatch = previewReady?.result?.matches?.isEmpty() == true,
                 onPreview = onPreview,
             )
-        } else if (!state.manual) {
+        } else {
             Text(
                 text = stringResource(Res.string.guided_preview_unavailable),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
