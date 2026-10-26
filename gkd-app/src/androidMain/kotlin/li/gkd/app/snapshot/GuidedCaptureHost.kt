@@ -25,7 +25,6 @@ object GuidedCaptureHost {
             screenshot = input.screenshot.takeIf {
                 input.screenshotStatus == SnapshotScreenshotStatus.Captured
             },
-            screenshotStatus = input.screenshotStatus,
             capturedAt = snapshot.id,
         )
         GuidedCaptureStore.put(capture)

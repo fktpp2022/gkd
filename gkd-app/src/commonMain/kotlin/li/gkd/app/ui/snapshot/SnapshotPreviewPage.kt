@@ -173,9 +173,9 @@ fun SnapshotPreviewPage(
                         appName = catalog.snapshot?.apps?.get(snapshot.appId)?.name ?: snapshot.appId,
                         sheetState = sheetState,
                         onDismissRequest = dismiss,
-                        onCreateRule = {
+                        onCreateRule = { tree ->
                             vm.scope.launchUi {
-                                if (GuidedSnapshotCapture.open(snapshot)) {
+                                if (GuidedSnapshotCapture.open(snapshot, tree)) {
                                     mainVm.navigator.navigate(GuidedAuthoringRoute())
                                 } else {
                                     ToastUtils.show(guidedDeadEnd)

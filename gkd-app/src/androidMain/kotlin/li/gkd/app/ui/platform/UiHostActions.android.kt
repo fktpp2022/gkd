@@ -9,6 +9,7 @@ import li.gkd.app.META
 import li.gkd.app.a11y.currentTopActivity
 import li.gkd.app.authoring.GuidedRecordingContext
 import li.gkd.app.authoring.GuidedRecordingGate
+import li.gkd.app.authoring.hasUsableNode
 import li.gkd.app.platform.service.ServiceController
 import li.gkd.app.service.A11yService
 import li.gkd.app.service.GuidedRuleButtonService
@@ -64,9 +65,7 @@ actual suspend fun UiHost.captureAndStartGuidedRecording(
     if (
         capture == null ||
         capture.snapshot.appId != appId ||
-        capture.snapshot.nodes.none {
-            it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0
-        }
+        !capture.snapshot.nodes.hasUsableNode()
     ) {
         GuidedAuthoringLaunch.returnToAuthoring()
         return false

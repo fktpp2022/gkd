@@ -98,6 +98,16 @@ object SnapshotStore {
         minSnapshot
     }
 
+    /** Decodes a committed stored snapshot with the same JSON contract used to write it. */
+    suspend fun loadSnapshot(id: Long): ComplexSnapshot? {
+        val text = withContext(Dispatchers.IO) {
+            snapshotFile(id).takeIf { it.isFile }?.readText()
+        } ?: return null
+        return withContext(Dispatchers.Default) {
+            runCatching { json.decodeFromString<ComplexSnapshot>(text) }.getOrNull()
+        }
+    }
+
     suspend fun delete(snapshot: Snapshot) {
         mutationMutex.withLock {
             currentCoroutineContext().ensureActive()

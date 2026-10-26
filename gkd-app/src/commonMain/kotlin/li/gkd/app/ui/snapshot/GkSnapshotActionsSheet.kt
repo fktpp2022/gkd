@@ -38,6 +38,7 @@ import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import li.gkd.app.app.ActivityNames.getShowActivityId
 import li.gkd.app.authoring.GuidedSnapshotCapture
+import li.gkd.app.model.ComplexSnapshot
 import li.gkd.app.network.AppLinks
 import li.gkd.app.resources.*
 import li.gkd.app.time.format
@@ -57,7 +58,7 @@ fun GkSnapshotActionsSheet(
     appName: String,
     sheetState: SheetState,
     onDismissRequest: () -> Unit,
-    onCreateRule: () -> Unit,
+    onCreateRule: (ComplexSnapshot) -> Unit,
     onShare: () -> Unit,
     shareEnabled: Boolean,
     onSaveToDownloads: () -> Unit,
@@ -73,8 +74,10 @@ fun GkSnapshotActionsSheet(
     var createRuleUsable by remember(snapshot.id) {
         mutableStateOf(snapshot.appId.isNotBlank())
     }
+    var createRuleTree by remember(snapshot.id) { mutableStateOf<ComplexSnapshot?>(null) }
     LaunchedEffect(snapshot.id) {
-        createRuleUsable = GuidedSnapshotCapture.isUsable(snapshot)
+        createRuleTree = GuidedSnapshotCapture.load(snapshot)
+        createRuleUsable = createRuleTree != null
     }
     GkModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -98,7 +101,9 @@ fun GkSnapshotActionsSheet(
                 title = stringResource(Res.string.guided_create_rule),
                 subtitle = if (createRuleUsable) null else stringResource(Res.string.guided_dead_end),
                 enabled = createRuleUsable,
-                onClick = { perform(onCreateRule) },
+                onClick = {
+                    createRuleTree?.let { tree -> perform { onCreateRule(tree) } }
+                },
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             SnapshotActionRow(

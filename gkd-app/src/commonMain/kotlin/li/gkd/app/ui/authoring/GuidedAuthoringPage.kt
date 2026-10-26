@@ -88,6 +88,7 @@ import li.gkd.app.authoring.GuidedRuleReadResult
 import li.gkd.app.authoring.GuidedRuleReader
 import li.gkd.app.authoring.GuidedSaveNotice
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.isUsableNode
 import li.gkd.app.authoring.property
 import li.gkd.app.model.ComplexSnapshot
 import li.gkd.app.model.NodeInfo
@@ -1526,12 +1527,7 @@ private fun GuidedNodeListSheet(
     onSelect: (NodeInfo) -> Unit,
 ) {
     val nodes = remember(snapshot) {
-        snapshot.nodes.filter { node ->
-            node.attr.visibleToUser &&
-                    node.attr.width > 0 &&
-                    node.attr.height > 0 &&
-                    GuidedNodeLabel.of(node) != null
-        }
+        snapshot.nodes.filter { it.isUsableNode() && GuidedNodeLabel.of(it) != null }
     }
     GkModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -1923,11 +1919,8 @@ private fun GuidedRuleCanvas(
         }
     }
     val outlineNodes = remember(snapshot) {
-        snapshot.nodes.filter { node ->
-            node.attr.visibleToUser &&
-                    node.attr.width > 0 &&
-                    node.attr.height > 0 &&
-                    (node.attr.clickable || GuidedNodeLabel.of(node) != null)
+        snapshot.nodes.filter {
+            it.isUsableNode() && (it.attr.clickable || GuidedNodeLabel.of(it) != null)
         }
     }
     var zoom by remember { mutableStateOf(1f) }
@@ -2120,9 +2113,7 @@ private fun canvasGeometry(
 private fun candidatesAt(nodes: List<NodeInfo>, point: Offset): List<NodeInfo> {
     val hits = nodes.filter { node ->
         val attr = node.attr
-        attr.visibleToUser &&
-                attr.width > 0 &&
-                attr.height > 0 &&
+        node.isUsableNode() &&
                 point.x >= attr.left &&
                 point.x <= attr.right &&
                 point.y >= attr.top &&
