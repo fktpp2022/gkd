@@ -36,6 +36,14 @@ class GuidedPrefillTest {
             text = "Dup",
             desc = "DupDesc",
         ),
+        node(id = 20, pid = 0, name = "android.widget.LinearLayout", vid = "row_a"),
+        node(id = 21, pid = 20, name = "android.widget.Button", text = "Delete"),
+        node(id = 22, pid = 0, name = "android.widget.LinearLayout", vid = "row_b"),
+        node(id = 23, pid = 22, name = "android.widget.Button", text = "Delete"),
+        node(id = 30, pid = 0, name = "android.widget.LinearLayout"),
+        node(id = 31, pid = 30, name = "android.widget.TextView", text = "Same"),
+        node(id = 32, pid = 0, name = "android.widget.LinearLayout"),
+        node(id = 33, pid = 32, name = "android.widget.TextView", text = "Same"),
     )
     private val adapter = SnapshotNodeAdapter(nodes)
 
@@ -47,8 +55,9 @@ class GuidedPrefillTest {
             listOf(GuidedCondition.Text(GuidedTextOperator.Is, "Plain")),
             prefill.target,
         )
-        assertEquals("[text=\"Plain\"]", prefill.selector)
-        assertEquals(1, prefill.matchCount)
+        assertEquals(null, prefill.context)
+        assertEquals("[text=\"Plain\"]", selectorOf(prefill))
+        assertEquals(1, matchCountOf(6, prefill))
         assertEquals(false, prefill.dynamicText)
     }
 
@@ -63,8 +72,9 @@ class GuidedPrefillTest {
             ),
             prefill.target,
         )
-        assertEquals("[text=\"Delete\"][vid=\"delete_primary\"]", prefill.selector)
-        assertEquals(1, prefill.matchCount)
+        assertEquals(null, prefill.context)
+        assertEquals("[text=\"Delete\"][vid=\"delete_primary\"]", selectorOf(prefill))
+        assertEquals(1, matchCountOf(1, prefill))
     }
 
     @Test
@@ -75,8 +85,8 @@ class GuidedPrefillTest {
             listOf(GuidedCondition.Text(GuidedTextOperator.Contains, "Battery")),
             prefill.target,
         )
-        assertEquals("[text*=\"Battery\"]", prefill.selector)
-        assertEquals(1, prefill.matchCount)
+        assertEquals("[text*=\"Battery\"]", selectorOf(prefill))
+        assertEquals(1, matchCountOf(3, prefill))
         assertEquals(true, prefill.dynamicText)
     }
 
@@ -85,7 +95,7 @@ class GuidedPrefillTest {
         val prefill = prefill(4)
 
         assertEquals(listOf(GuidedCondition.ViewId("clock")), prefill.target)
-        assertEquals("[vid=\"clock\"]", prefill.selector)
+        assertEquals("[vid=\"clock\"]", selectorOf(prefill))
         assertEquals(false, prefill.dynamicText)
     }
 
@@ -97,7 +107,33 @@ class GuidedPrefillTest {
             listOf(GuidedCondition.Description(GuidedTextOperator.Is, "Search")),
             prefill.target,
         )
-        assertEquals("[desc=\"Search\"]", prefill.selector)
+        assertEquals("[desc=\"Search\"]", selectorOf(prefill))
+    }
+
+    @Test
+    fun triesOneInsideContextOnTheNearestStableAncestor() {
+        val prefill = prefill(21)
+
+        assertEquals(
+            GuidedContext(
+                GuidedContextRelation.Inside,
+                listOf(GuidedCondition.ViewId("row_a")),
+            ),
+            prefill.context,
+        )
+        assertEquals(
+            "[vid=\"row_a\"] > @android.widget.Button[text=\"Delete\"]",
+            selectorOf(prefill),
+        )
+        assertEquals(1, matchCountOf(21, prefill))
+    }
+
+    @Test
+    fun keepsTheDraftBroadWhenNoAncestorNarrowsIt() {
+        val prefill = prefill(31)
+
+        assertEquals(null, prefill.context)
+        assertEquals(2, matchCountOf(31, prefill))
     }
 
     @Test
@@ -115,9 +151,9 @@ class GuidedPrefillTest {
         )
         assertEquals(
             "android.widget.Button[text=\"Dup\"][vid=\"dup\"][id=\"pkg:id/dup\"]",
-            prefill.selector,
+            selectorOf(prefill),
         )
-        assertEquals(1, prefill.matchCount)
+        assertEquals(1, matchCountOf(9, prefill))
     }
 
     @Test
@@ -128,23 +164,39 @@ class GuidedPrefillTest {
             listOf(GuidedCondition.TypeName("com.example.UniqueButton")),
             prefill.target,
         )
-        assertEquals(1, prefill.matchCount)
+        assertEquals(1, matchCountOf(7, prefill))
     }
 
     @Test
     fun reportsNodesWithoutIdentifiers() {
         val result = assertIs<GuidedPrefillResult.Failure>(
-            GuidedPrefillBuilder.build(nodes[8], adapter),
+            GuidedPrefillBuilder.build(nodeOf(8), adapter),
         )
 
         assertEquals(GuidedPrefillFailure.NoIdentifier, result.reason)
     }
 
     private fun prefill(id: Int): GuidedPrefill =
-        when (val result = GuidedPrefillBuilder.build(nodes[id], adapter)) {
+        when (val result = GuidedPrefillBuilder.build(nodeOf(id), adapter)) {
             is GuidedPrefillResult.Success -> result.prefill
             is GuidedPrefillResult.Failure -> error("Prefill failed: ${result.reason}")
         }
+
+    private fun selectorOf(prefill: GuidedPrefill): String =
+        when (val result = GuidedSelectorCompiler.compile(prefill.toDraft())) {
+            is GuidedSelectorCompileResult.Success -> result.selector
+            is GuidedSelectorCompileResult.Failure -> error("Compile failed: ${result.reason}")
+        }
+
+    private fun matchCountOf(id: Int, prefill: GuidedPrefill): Int =
+        when (val result = GuidedPreviewBuilder.build(prefill.toDraft(), nodeOf(id), adapter)) {
+            is GuidedPreviewResult.Ready -> result.matches.size
+            else -> error("Preview not ready")
+        }
+
+    private fun nodeOf(id: Int): NodeInfo = nodes.first { it.id == id }
+
+    private fun GuidedPrefill.toDraft() = GuidedSelectorDraft(target, context)
 
     private fun node(
         id: Int,

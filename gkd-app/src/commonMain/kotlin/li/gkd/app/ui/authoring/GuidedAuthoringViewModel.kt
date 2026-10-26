@@ -394,8 +394,9 @@ class GuidedAuthoringViewModel(
             is GuidedPrefillResult.Success -> prefill.prefill.target
             is GuidedPrefillResult.Failure -> emptyList()
         }
+        val context = (prefill as? GuidedPrefillResult.Success)?.prefill?.context
         val dynamicText = (prefill as? GuidedPrefillResult.Success)?.prefill?.dynamicText == true
-        val draft = GuidedRuleDraft(target = target, action = action)
+        val draft = GuidedRuleDraft(target = target, context = context, action = action)
         baseline = draft
         preEditDraft = null
         state.update {

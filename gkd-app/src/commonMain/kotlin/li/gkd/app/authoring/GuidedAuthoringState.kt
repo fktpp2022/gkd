@@ -92,13 +92,7 @@ object GuidedContextBuilder {
         nodes: List<NodeInfo>,
         adapter: SnapshotNodeAdapter,
     ): GuidedContextBuildResult {
-        val identifiers = when (val result = GuidedPrefillBuilder.build(anchor, adapter)) {
-            is GuidedPrefillResult.Success -> result.prefill.target
-            is GuidedPrefillResult.Failure -> {
-                return GuidedContextBuildResult.Failure(GuidedContextBuildFailure.NoStableLabel)
-            }
-        }
-        val identifier = identifiers.firstOrNull()
+        val identifier = GuidedPrefillBuilder.identifiers(anchor, adapter).firstOrNull()
             ?: return GuidedContextBuildResult.Failure(GuidedContextBuildFailure.NoStableLabel)
         val relation = if (mode == GuidedContextMode.Inside) {
             GuidedContextRelation.Inside
