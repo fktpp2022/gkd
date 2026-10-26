@@ -13,6 +13,7 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
@@ -82,11 +83,14 @@ class GuidedRuleButtonService : OverlayWindowService(
         val status by GuidedRecordingSession.status.collectAsState()
         val topActivity by topActivityFlow.collectAsState(initial = currentTopActivity)
         val context = status.context
+        val idle = status.phase == GuidedRecordingPhase.Idle || context == null
+        val showIcon = idle && topActivity.appId != META.appId
+        LaunchedEffect(showIcon, idle) { setOverlayContentVisible(showIcon || !idle) }
         // GKD's own UI (authoring included) sits above the target app, so the floating
         // capture entry is useless there; draw nothing to also avoid intercepting taps.
         // The chip is a separate surface and stays visible for the live recording phase.
-        if (status.phase == GuidedRecordingPhase.Idle || context == null) {
-            if (topActivity.appId != META.appId) {
+        if (idle) {
+            if (showIcon) {
                 val alpha = 0.75f
                 GkIcon(
                     imageVector = GkIcons.Rule,
@@ -97,7 +101,7 @@ class GuidedRuleButtonService : OverlayWindowService(
                     tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
                 )
             }
-        } else {
+        } else if (context != null) {
             GuidedRecordingChip(context, canStop = status.canStop)
         }
     }
