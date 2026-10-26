@@ -60,6 +60,7 @@ import li.gkd.app.authoring.GuidedSelectorCompileResult
 import li.gkd.app.authoring.GuidedSelectorCompiler
 import li.gkd.app.authoring.GuidedTapEvent
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.hasUsableNode
 import li.gkd.app.authoring.toSelectorDraft
 import li.gkd.app.model.NodeInfo
 import li.gkd.app.resources.*
@@ -139,7 +140,7 @@ class GuidedAuthoringViewModel(
     private var adapter: SnapshotNodeAdapter? =
         capture?.snapshot?.nodes?.takeIf { it.isNotEmpty() }?.let(::SnapshotNodeAdapter)
     private var nodes: List<NodeInfo> = capture?.snapshot?.nodes.orEmpty()
-    private var usable = nodes.any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }
+    private var usable = nodes.hasUsableNode()
 
     private var ruleScope: GuidedRuleScope? = null
     private var authoringGroupName: String = ""
@@ -244,7 +245,7 @@ class GuidedAuthoringViewModel(
         this.capture = capture
         this.adapter = adapter
         nodes = capture.snapshot.nodes
-        usable = nodes.any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }
+        usable = nodes.hasUsableNode()
         state.update { it.copy(recordingFailure = null) }
     }
 

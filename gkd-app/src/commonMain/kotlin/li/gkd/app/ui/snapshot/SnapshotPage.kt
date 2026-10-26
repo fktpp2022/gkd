@@ -495,9 +495,9 @@ fun SnapshotPage(
             appName = appNames[snapshot.appId] ?: snapshot.appId,
             sheetState = sheetState,
             onDismissRequest = dismiss,
-            onCreateRule = {
+            onCreateRule = { tree ->
                 actionScope.launchUi {
-                    if (GuidedSnapshotCapture.open(snapshot)) {
+                    if (GuidedSnapshotCapture.open(snapshot, tree)) {
                         mainVm.navigator.navigate(GuidedAuthoringRoute())
                     } else {
                         ToastUtils.show(getString(Res.string.guided_dead_end))
