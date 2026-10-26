@@ -34,21 +34,19 @@ object GuidedRuleEligibility {
             ?: SubsItem(id = SubscriptionIds.LOCAL, order = 0)
         if (!item.enable) return emptyList()
         val appInfoById = scope.appInfo?.let { mapOf(scope.appId to it) }.orEmpty()
-        val summary = runCatching {
-            RuleSummaryBuilder.build(
-                runtime = RuleRuntime(
-                    environment = {
-                        RuleMatchEnvironment(scope.launcherAppId, scope.systemAppIds)
-                    },
-                ),
-                subscriptions = listOf(UsedSubsEntry(item, scope.local)),
-                appInfoById = appInfoById,
-                appConfigs = scope.configs.appConfigs,
-                groupConfigs = scope.configs.appGroupConfigs + scope.configs.globalGroupConfigs,
-                categoryConfigs = scope.configs.categoryConfigs,
-                launcherAppId = scope.launcherAppId,
-            )
-        }.getOrNull() ?: return emptyList()
+        val summary = RuleSummaryBuilder.build(
+            runtime = RuleRuntime(
+                environment = {
+                    RuleMatchEnvironment(scope.launcherAppId, scope.systemAppIds)
+                },
+            ),
+            subscriptions = listOf(UsedSubsEntry(item, scope.local)),
+            appInfoById = appInfoById,
+            appConfigs = scope.configs.appConfigs,
+            groupConfigs = scope.configs.appGroupConfigs + scope.configs.globalGroupConfigs,
+            categoryConfigs = scope.configs.categoryConfigs,
+            launcherAppId = scope.launcherAppId,
+        )
         val appCandidates = summary.appIdToRules[scope.appId].orEmpty()
             .filter { it.matchActivity(scope.appId, scope.activityId) }
             .map { rule ->
