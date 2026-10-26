@@ -1,8 +1,12 @@
 package li.gkd.app.authoring
 
+import li.gkd.app.model.AppInfo
 import li.gkd.app.model.AttrInfo
 import li.gkd.app.model.NodeInfo
 import li.gkd.app.subscription.RawSubscription
+import li.gkd.db.SubsItem
+import li.gkd.db.SubscriptionConfigSnapshot
+import li.gkd.db.SubscriptionIds
 
 fun testNode(
     id: Int,
@@ -192,4 +196,38 @@ fun testGlobalGroup(
     disableIfAppGroupMatch = null,
     rules = rules,
     apps = null,
+)
+
+fun testCandidates(
+    groups: List<RawSubscription.RawAppGroup>,
+    globalGroups: List<RawSubscription.RawGlobalGroup> = emptyList(),
+    authoringGroupName: String = "My rules",
+): List<GuidedRuleCandidate> = GuidedRuleEligibility.candidates(
+    scope = GuidedRuleScope(
+        local = RawSubscription(
+            id = SubscriptionIds.LOCAL,
+            name = "Local rules",
+            version = 1,
+            globalGroups = globalGroups,
+            apps = listOf(RawSubscription.RawApp("com.example", "Example", groups)),
+        ),
+        configs = SubscriptionConfigSnapshot(
+            subsItems = listOf(SubsItem(id = SubscriptionIds.LOCAL, enable = true, order = 0)),
+        ),
+        appId = "com.example",
+        activityId = null,
+        appInfo = AppInfo(
+            id = "com.example",
+            name = "Example",
+            versionCode = 5,
+            versionName = "1.0",
+            isSystem = false,
+            mtime = 0L,
+            hidden = false,
+            userId = 0,
+        ),
+        launcherAppId = "com.other.launcher",
+        systemAppIds = emptySet(),
+    ),
+    authoringGroupName = authoringGroupName,
 )

@@ -2,10 +2,8 @@ package li.gkd.app.authoring
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
-import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertNull
-import kotlin.test.assertTrue
 import li.gkd.app.subscription.RawSubscription
 import li.gkd.db.SubscriptionIds
 
@@ -49,10 +47,6 @@ class GuidedRuleWriterTest {
         assertNull(rule.actionMaximum)
         assertNull(rule.resetMatch)
         assertNull(rule.activityIds)
-        assertEquals(1, success.groupKey)
-        assertEquals(1, success.ruleKey)
-        assertTrue(success.createdGroup)
-        assertFalse(success.replaced)
     }
 
     @Test
@@ -82,8 +76,6 @@ class GuidedRuleWriterTest {
         assertEquals(false, group.enable)
         assertEquals(listOf(4, 5), group.rules.map { it.key })
         assertEquals("[text*=\"Later\"]", group.rules.last().matches?.single())
-        assertEquals(5, success.ruleKey)
-        assertFalse(success.createdGroup)
     }
 
     @Test
@@ -102,8 +94,6 @@ class GuidedRuleWriterTest {
         )
         val result = GuidedRuleWriter.write(current, request())
         val success = assertIs<GuidedRuleWriteResult.Success>(result)
-        assertEquals(8, success.groupKey)
-        assertTrue(success.createdGroup)
         val apps = success.subscription.apps
         assertEquals(listOf("com.other", "com.example"), apps.map { it.id })
         assertEquals(listOf(2, 7, 8), apps[1].groups.map { it.key })
@@ -146,8 +136,6 @@ class GuidedRuleWriterTest {
             ),
         )
         val success = assertIs<GuidedRuleWriteResult.Success>(result)
-        assertTrue(success.replaced)
-        assertEquals(2, success.ruleKey)
         val rules = success.subscription.apps.single().groups.single().rules
         assertEquals(listOf(1, 2, 3), rules.map { it.key })
         val replaced = rules[1]

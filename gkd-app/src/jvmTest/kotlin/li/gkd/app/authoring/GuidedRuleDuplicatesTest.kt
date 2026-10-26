@@ -14,10 +14,7 @@ class GuidedRuleDuplicatesTest {
         assertEquals(
             GuidedDuplicateResult.None,
             GuidedDuplicateCheck.find(
-                GuidedRuleCandidates.fromGroup(
-                    testAppGroup(name = "My rules", rules = listOf(testAppRule())),
-                    "My rules",
-                ),
+                testCandidates(listOf(testAppGroup(name = "My rules", rules = listOf(testAppRule())))),
                 "[text=\"Other\"]",
             ),
         )
@@ -25,16 +22,14 @@ class GuidedRuleDuplicatesTest {
 
     @Test
     fun comparesCanonicalStringsAcrossGroups() {
-        val candidates = GuidedRuleCandidates.build(
-            appGroups = listOf(
+        val candidates = testCandidates(
+            groups = listOf(
                 testAppGroup(
                     key = 3,
                     name = "Other",
                     rules = listOf(testAppRule(key = 6, matches = listOf("[text = \"Skip\"]"))),
                 ),
             ),
-            globalGroups = emptyList(),
-            authoringGroupName = "My rules",
         )
         val found = assertIs<GuidedDuplicateResult.Found>(
             GuidedDuplicateCheck.find(candidates, skip),
@@ -46,16 +41,14 @@ class GuidedRuleDuplicatesTest {
 
     @Test
     fun prefersTheAuthoringGroupOverForeignGroups() {
-        val foreign = GuidedRuleCandidates.fromGroup(
-            testAppGroup(key = 1, name = "Other", rules = listOf(testAppRule(key = 1))),
-            "My rules",
-        )
-        val authoring = GuidedRuleCandidates.fromGroup(
-            testAppGroup(key = 2, name = "My rules", rules = listOf(testAppRule(key = 9))),
-            "My rules",
+        val candidates = testCandidates(
+            listOf(
+                testAppGroup(key = 1, name = "Other", rules = listOf(testAppRule(key = 1))),
+                testAppGroup(key = 2, name = "My rules", rules = listOf(testAppRule(key = 9))),
+            ),
         )
         val found = assertIs<GuidedDuplicateResult.Found>(
-            GuidedDuplicateCheck.find(foreign + authoring, skip),
+            GuidedDuplicateCheck.find(candidates, skip),
         )
         assertEquals("My rules", found.candidate.groupName)
         assertEquals(9, found.candidate.ruleKey)
@@ -64,13 +57,13 @@ class GuidedRuleDuplicatesTest {
 
     @Test
     fun offersReplaceOnlyForAKeyedRepresentableRuleInTheAuthoringGroup() {
-        fun found(rule: li.gkd.app.subscription.RawSubscription.RawAppRule): GuidedDuplicateResult.Found =
+        fun found(
+            rule: li.gkd.app.subscription.RawSubscription.RawAppRule,
+            groupName: String = "My rules",
+        ): GuidedDuplicateResult.Found =
             assertIs(
                 GuidedDuplicateCheck.find(
-                    GuidedRuleCandidates.fromGroup(
-                        testAppGroup(name = "My rules", rules = listOf(rule)),
-                        "My rules",
-                    ),
+                    testCandidates(listOf(testAppGroup(name = groupName, rules = listOf(rule)))),
                     skip,
                 ),
             )
@@ -79,29 +72,20 @@ class GuidedRuleDuplicatesTest {
         assertFalse(found(testAppRule(key = null)).canReplace)
         assertFalse(found(testAppRule(key = 1).copy(fastQuery = false)).canReplace)
         assertFalse(found(testAppRule(key = 1, matches = null, anyMatches = listOf(skip))).canReplace)
-        assertFalse(
-            assertIs<GuidedDuplicateResult.Found>(
-                GuidedDuplicateCheck.find(
-                    GuidedRuleCandidates.fromGroup(
-                        testAppGroup(name = "Other", rules = listOf(testAppRule(key = 1))),
-                        "My rules",
-                    ),
-                    skip,
-                ),
-            ).canReplace,
-        )
+        assertFalse(found(testAppRule(key = 1), groupName = "Other").canReplace)
     }
 
     @Test
     fun matchesAnyMatchesAlternatives() {
-        val candidates = GuidedRuleCandidates.fromGroup(
-            testAppGroup(
-                name = "My rules",
-                rules = listOf(
-                    testAppRule(key = 1, matches = null, anyMatches = listOf("[vid=\"x\"]", skip)),
+        val candidates = testCandidates(
+            listOf(
+                testAppGroup(
+                    name = "My rules",
+                    rules = listOf(
+                        testAppRule(key = 1, matches = null, anyMatches = listOf("[vid=\"x\"]", skip)),
+                    ),
                 ),
             ),
-            "My rules",
         )
         val found = assertIs<GuidedDuplicateResult.Found>(
             GuidedDuplicateCheck.find(candidates, skip),
@@ -111,8 +95,8 @@ class GuidedRuleDuplicatesTest {
 
     @Test
     fun ordersCandidatesAuthoringGroupThenOtherAppGroupsThenGlobalGroups() {
-        val candidates = GuidedRuleCandidates.build(
-            appGroups = listOf(
+        val candidates = testCandidates(
+            groups = listOf(
                 testAppGroup(key = 1, name = "Other", rules = listOf(testAppRule(key = 1))),
                 testAppGroup(key = 2, name = "My rules", rules = listOf(testAppRule(key = 2))),
             ),
@@ -123,7 +107,6 @@ class GuidedRuleDuplicatesTest {
                     rules = listOf(testGlobalRule(key = 3)),
                 ),
             ),
-            authoringGroupName = "My rules",
         )
         assertEquals(listOf("My rules", "Other", "Global"), candidates.map { it.groupName })
         assertEquals(listOf(true, false, false), candidates.map { it is GuidedRuleCandidate.App && it.inAuthoringGroup })
@@ -131,9 +114,10 @@ class GuidedRuleDuplicatesTest {
 
     @Test
     fun ignoresStoredSelectorsThatDoNotCompile() {
-        val candidates = GuidedRuleCandidates.fromGroup(
-            testAppGroup(name = "My rules", rules = listOf(testAppRule(matches = listOf("[text=")))),
-            "My rules",
+        val candidates = testCandidates(
+            listOf(
+                testAppGroup(name = "My rules", rules = listOf(testAppRule(matches = listOf("[text=")))),
+            ),
         )
         assertEquals(GuidedDuplicateResult.None, GuidedDuplicateCheck.find(candidates, skip))
     }

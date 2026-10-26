@@ -25,33 +25,3 @@ sealed interface GuidedRuleCandidate {
         override val inAuthoringGroup get() = false
     }
 }
-
-object GuidedRuleCandidates {
-    /** Groups must already be eligible for the target app; the authoring group is searched first. */
-    fun build(
-        appGroups: List<RawSubscription.RawAppGroup>,
-        globalGroups: List<RawSubscription.RawGlobalGroup>,
-        authoringGroupName: String,
-    ): List<GuidedRuleCandidate> {
-        val (authoring, other) = appGroups.partition { it.name == authoringGroupName }
-        return (authoring + other).flatMap { fromGroup(it, authoringGroupName) } +
-                globalGroups.flatMap { fromGroup(it) }
-    }
-
-    fun fromGroup(
-        group: RawSubscription.RawAppGroup,
-        authoringGroupName: String,
-    ): List<GuidedRuleCandidate> = group.rules.map { rule ->
-        GuidedRuleCandidate.App(
-            group = group,
-            rule = rule,
-            inAuthoringGroup = group.name == authoringGroupName,
-        )
-    }
-
-    fun fromGroup(
-        group: RawSubscription.RawGlobalGroup,
-    ): List<GuidedRuleCandidate> = group.rules.map { rule ->
-        GuidedRuleCandidate.Global(group = group, rule = rule)
-    }
-}
