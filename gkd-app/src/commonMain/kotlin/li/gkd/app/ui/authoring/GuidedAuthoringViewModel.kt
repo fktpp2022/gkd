@@ -26,7 +26,6 @@ import li.gkd.app.authoring.GuidedDuplicateCheck
 import li.gkd.app.authoring.GuidedDuplicateResult
 import li.gkd.app.authoring.GuidedExistingRuleDetector
 import li.gkd.app.authoring.GuidedExistingRuleHit
-import li.gkd.app.authoring.GuidedMatchScope
 import li.gkd.app.authoring.GuidedNodeLabel
 import li.gkd.app.authoring.GuidedPick
 import li.gkd.app.authoring.GuidedPickResolver
@@ -62,6 +61,7 @@ import li.gkd.app.authoring.GuidedSelectorCompileResult
 import li.gkd.app.authoring.GuidedSelectorCompiler
 import li.gkd.app.authoring.GuidedTapEvent
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.broadPlan
 import li.gkd.app.authoring.hasUsableNode
 import li.gkd.app.authoring.scanGuidedRules
 import li.gkd.app.authoring.toSelectorDraft
@@ -169,6 +169,7 @@ class GuidedAuthoringViewModel(
     private var preEditDraft: GuidedRuleDraft? = null
     private var preEditNameEdited: Boolean = false
     private var previewJob: Job? = null
+    private var broadJob: Job? = null
     private var detectionJob: Job? = null
     private var persistJob: Job? = null
     private var recordingWaitJob: Job? = null
@@ -518,9 +519,13 @@ class GuidedAuthoringViewModel(
             }
         }
 
-    private fun updateDraft(transform: (GuidedRuleDraft) -> GuidedRuleDraft) {
+    private fun updateDraft(
+        recheckBroad: Boolean = false,
+        transform: (GuidedRuleDraft) -> GuidedRuleDraft,
+    ) {
         state.update { it.copy(draft = transform(it.draft), saveError = false) }
         refreshPreview()
+        if (recheckBroad) refreshBroad()
     }
 
     fun showOverlap(candidates: List<NodeInfo>) {
@@ -551,7 +556,7 @@ class GuidedAuthoringViewModel(
         when (val result = GuidedContextBuilder.build(mode, pick.actable, anchor, nodes, adapter)) {
             is GuidedContextBuildResult.Success -> {
                 state.update { it.copy(contextMode = null, contextError = false) }
-                updateDraft { it.copy(context = result.context) }
+                updateDraft(recheckBroad = true) { it.copy(context = result.context) }
             }
 
             is GuidedContextBuildResult.Failure -> {
@@ -562,7 +567,24 @@ class GuidedAuthoringViewModel(
         }
     }
 
-    fun removeContext() = updateDraft { it.copy(context = null) }
+    fun removeContext() = updateDraft(recheckBroad = true) { it.copy(context = null) }
+
+    private fun refreshBroad() {
+        val adapter = adapter ?: return
+        val pick = state.value.pick ?: return
+        val scan = state.value.scan as? GuidedRuleScan.Ready ?: return
+        val draft = state.value.draft
+        val candidates = duplicateCandidates(scan.candidates)
+        broadJob?.cancel()
+        broadJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                GuidedSavePlanner.plan(draft.toSelectorDraft(), pick.actable, adapter, candidates)
+            }
+            val current = state.value
+            if (current.draft != draft || current.pick != pick) return@launch
+            broad.value = result.broadPlan()?.let(::GuidedBroadState)
+        }
+    }
 
     fun dismissExisting() = state.update { it.copy(existingDismissed = true) }
 
@@ -681,9 +703,13 @@ class GuidedAuthoringViewModel(
             when (result) {
                 GuidedSavePlanResult.Incomplete -> state.update { it.copy(saveError = true) }
                 GuidedSavePlanResult.Defect -> state.update { it.copy(saveError = true) }
-                is GuidedSavePlanResult.Ready -> when (result.plan.scope) {
-                    GuidedMatchScope.Many -> broad.value = GuidedBroadState(result.plan)
-                    GuidedMatchScope.Zero, GuidedMatchScope.One -> handleDuplicate(result.plan)
+                is GuidedSavePlanResult.Ready -> {
+                    val broadPlan = result.broadPlan()
+                    if (broadPlan != null) {
+                        broad.value = GuidedBroadState(broadPlan)
+                    } else {
+                        handleDuplicate(result.plan)
+                    }
                 }
             }
         }
@@ -922,6 +948,7 @@ class GuidedAuthoringViewModel(
 
     fun backToPick() {
         previewJob?.cancel()
+        broadJob?.cancel()
         detectionJob?.cancel()
         recordingWaitJob?.cancel()
         pendingRecordedAction = null
@@ -959,6 +986,7 @@ class GuidedAuthoringViewModel(
 
     fun closeSession() {
         previewJob?.cancel()
+        broadJob?.cancel()
         detectionJob?.cancel()
         persistJob?.cancel()
         recordingWaitJob?.cancel()

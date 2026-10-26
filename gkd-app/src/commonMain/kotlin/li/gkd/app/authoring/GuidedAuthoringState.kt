@@ -202,6 +202,9 @@ object GuidedSavePlanner {
     }
 }
 
+fun GuidedSavePlanResult.broadPlan(): GuidedSavePlan? =
+    (this as? GuidedSavePlanResult.Ready)?.plan?.takeIf { it.scope == GuidedMatchScope.Many }
+
 enum class GuidedDisabledScope { Subscription, App, Group }
 
 sealed class GuidedSaveNotice {
