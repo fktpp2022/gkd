@@ -1131,7 +1131,6 @@
     <string name="guided_context_inside_chip">包含于“%1$s”</string>
     <string name="guided_context_next_to_chip">相邻于“%1$s”</string>
     <string name="guided_context_invalid">该元素没有稳定的标识。尝试它的容器或其他附近元素。</string>
-    <string name="guided_context_hint">点按能标识目标元素的容器或附近元素。</string>
     <string name="guided_match_count_loading">正在计算匹配…</string>
     <string name="guided_preview_unavailable">预览不可用</string>
     <string name="guided_preview_full">全屏查看匹配预览</string>
@@ -1170,13 +1169,11 @@
     <string name="guided_open_advanced">打开进阶编辑器</string>
     <string name="guided_protected_screenshot">截图受保护。你仍可通过元素轮廓进行选择。</string>
     <string name="guided_snapshot_preview">以下预览来自 %1$s的快照。规则不会修改该快照。</string>
-    <string name="guided_finding_elements">正在查找元素…</string>
     <string name="guided_limits">仅在应用打开后立即操作</string>
     <string name="guided_limits_helper">应用打开 10 秒后或点按一次后停止。</string>
     <string name="guided_options">选项</string>
     <string name="guided_advanced_selector">规范选择器</string>
     <string name="guided_rule_name">规则名称</string>
-    <string name="guided_rule_name_hint">留空则自动命名</string>
     <string name="guided_rule_name_tap">点按“%1$s”</string>
     <string name="guided_rule_name_long_press">长按“%1$s”</string>
     <string name="guided_rule_name_tap_fallback">点按元素</string>
@@ -1210,10 +1207,6 @@
     <string name="guided_turn_on">开启</string>
     <string name="guided_not_now">稍后</string>
     <string name="guided_a11y_required">请先开启 GKD 的无障碍服务，然后再次打开此开关。</string>
-    <string name="guided_enable_title">看见即可创建规则</string>
-    <string name="guided_enable_body">在其他应用上方显示一个小的 GKD 按钮。在想要修复的界面上点按它，GKD 会捕获该界面并让你选择要操作的元素。</string>
-    <string name="guided_enable_turn_on">开启</string>
-    <string name="guided_enable_not_now">暂不开启</string>
     <string name="guided_record">录制点按</string>
     <string name="guided_recording_title">正在录制点按 — %1$s</string>
     <string name="guided_recording_paused">GKD 规则已暂停</string>
