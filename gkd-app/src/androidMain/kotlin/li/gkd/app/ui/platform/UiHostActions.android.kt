@@ -7,6 +7,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 import li.gkd.app.META
 import li.gkd.app.a11y.currentTopActivity
+import li.gkd.app.authoring.GuidedCapture
 import li.gkd.app.authoring.GuidedRecordingContext
 import li.gkd.app.authoring.GuidedRecordingGate
 import li.gkd.app.platform.service.ServiceController
@@ -47,27 +48,8 @@ actual suspend fun UiHost.captureAndStartGuidedRecording(
     appId: String,
     appName: String?,
 ): Boolean {
-    moveTaskToBack(true)
-    withTimeoutOrNull(1500) {
-        while (currentTopActivity.appId == META.appId) {
-            delay(50)
-        }
-    }
-    val capture = try {
-        GuidedCaptureHost.capture()
-    } catch (e: CancellationException) {
-        throw e
-    } catch (e: Throwable) {
-        LogUtils.d("引导规则重新截图失败", e)
-        null
-    }
-    if (
-        capture == null ||
-        capture.snapshot.appId != appId ||
-        capture.snapshot.nodes.none {
-            it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0
-        }
-    ) {
+    val capture = captureTargetApp(appId)
+    if (capture == null) {
         GuidedAuthoringLaunch.returnToAuthoring()
         return false
     }
@@ -83,4 +65,32 @@ actual suspend fun UiHost.captureAndStartGuidedRecording(
         )
     )
     return true
+}
+
+actual suspend fun UiHost.recaptureGuidedAuthoring(appId: String): Boolean {
+    val captured = captureTargetApp(appId) != null
+    GuidedAuthoringLaunch.returnToAuthoring()
+    return captured
+}
+
+private suspend fun UiHost.captureTargetApp(appId: String): GuidedCapture? {
+    moveTaskToBack(true)
+    withTimeoutOrNull(1500) {
+        while (currentTopActivity.appId == META.appId) {
+            delay(50)
+        }
+    }
+    val capture = try {
+        GuidedCaptureHost.capture()
+    } catch (e: CancellationException) {
+        throw e
+    } catch (e: Throwable) {
+        LogUtils.d("引导规则重新截图失败", e)
+        null
+    }
+    return capture?.takeIf {
+        it.snapshot.appId == appId && it.snapshot.nodes.any { node ->
+            node.attr.visibleToUser && node.attr.width > 0 && node.attr.height > 0
+        }
+    }
 }
