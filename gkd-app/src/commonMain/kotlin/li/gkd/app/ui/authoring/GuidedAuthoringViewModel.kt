@@ -48,6 +48,7 @@ import li.gkd.app.authoring.GuidedRuleEligibility
 import li.gkd.app.authoring.GuidedRuleReadResult
 import li.gkd.app.authoring.GuidedRuleReader
 import li.gkd.app.authoring.GuidedRuleScope
+import li.gkd.app.authoring.GuidedRuleScan
 import li.gkd.app.authoring.GuidedRuleWriteFailure
 import li.gkd.app.authoring.GuidedRuleWriteRequest
 import li.gkd.app.authoring.GuidedRuleWriteResult
@@ -61,6 +62,7 @@ import li.gkd.app.authoring.GuidedSelectorCompileResult
 import li.gkd.app.authoring.GuidedSelectorCompiler
 import li.gkd.app.authoring.GuidedTapEvent
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.scanGuidedRules
 import li.gkd.app.authoring.toSelectorDraft
 import li.gkd.app.model.NodeInfo
 import li.gkd.app.resources.*
@@ -94,7 +96,7 @@ data class GuidedAuthoringState(
     val draft: GuidedRuleDraft = GuidedRuleDraft(),
     val pick: GuidedPick? = null,
     val preview: GuidedPreviewState = GuidedPreviewState.NoPreview,
-    val candidates: List<GuidedRuleCandidate> = emptyList(),
+    val scan: GuidedRuleScan = GuidedRuleScan.Pending,
     val existingHits: List<GuidedExistingRuleHit> = emptyList(),
     val existingDismissed: Boolean = true,
     val editing: GuidedRuleCandidate.App? = null,
@@ -109,7 +111,24 @@ data class GuidedAuthoringState(
     val overlap: List<NodeInfo>? = null,
     val recordingFailure: GuidedRecordingFailure? = null,
     val recordSpent: Boolean = false,
-)
+) {
+    val canSave: Boolean
+        get() {
+            if (saving || draft.target.isEmpty() || appId == null) return false
+            if (preview is GuidedPreviewState.Defect) return false
+            if (scan !is GuidedRuleScan.Ready) return false
+            return draft.target.all { condition ->
+                when (condition) {
+                    is GuidedCondition.Text -> condition.value.isNotBlank()
+                    is GuidedCondition.Description -> condition.value.isNotBlank()
+                    is GuidedCondition.ViewId -> condition.value.isNotBlank()
+                    is GuidedCondition.FullId -> condition.value.isNotBlank()
+                    is GuidedCondition.TypeName -> condition.value.isNotBlank()
+                    GuidedCondition.Clickable, GuidedCondition.VisibleToUser -> true
+                }
+            }
+        }
+}
 
 enum class GuidedDuplicateKind { Replaceable, AuthoringAdvanced, Foreign }
 
@@ -333,21 +352,23 @@ class GuidedAuthoringViewModel(
                     .mapTo(mutableSetOf()) { it.id },
             )
             ruleScope = scope
-            val candidates = withContext(Dispatchers.Default) {
-                GuidedRuleEligibility.candidates(scope, authoringGroupName)
+            val scan = withContext(Dispatchers.Default) {
+                scanGuidedRules { GuidedRuleEligibility.candidates(scope, authoringGroupName) }
             }
             val appName = state.value.appName?.takeIf { it != appId }
                 ?: scope.appInfo?.name ?: appId
             state.update {
                 it.copy(
                     appName = appName,
-                    candidates = candidates,
+                    scan = scan,
                     notice = GuidedSaveNotices.resolve(scope, authoringGroupName),
                 )
             }
-            val pick = state.value.pick
-            if (pick != null && !state.value.manual && state.value.editing == null) {
-                detectExisting(pick, candidates)
+            if (scan is GuidedRuleScan.Ready) {
+                val pick = state.value.pick
+                if (pick != null && !state.value.manual && state.value.editing == null) {
+                    detectExisting(pick, scan.candidates)
+                }
             }
         }
     }
@@ -398,7 +419,10 @@ class GuidedAuthoringViewModel(
             )
         }
         refreshPreview()
-        detectExisting(pick, state.value.candidates)
+        val scan = state.value.scan
+        if (scan is GuidedRuleScan.Ready) {
+            detectExisting(pick, scan.candidates)
+        }
     }
 
     private fun detectExisting(pick: GuidedPick, candidates: List<GuidedRuleCandidate>) {
@@ -614,16 +638,17 @@ class GuidedAuthoringViewModel(
 
     fun requestSave() {
         val current = state.value
-        if (!canSaveState(current) || persistJob?.isActive == true) return
+        if (!current.canSave || persistJob?.isActive == true) return
+        val scan = current.scan as? GuidedRuleScan.Ready ?: return
         state.update { it.copy(saving = true, saveError = false) }
         val adapter = adapter
         if (current.manual || adapter == null || current.pick == null) {
-            saveManual()
+            saveManual(scan.candidates)
             return
         }
         val draft = current.draft
         val actable = current.pick.actable
-        val candidates = duplicateCandidates()
+        val candidates = duplicateCandidates(scan.candidates)
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
                 GuidedSavePlanner.plan(draft.toSelectorDraft(), actable, adapter, candidates)
@@ -640,7 +665,7 @@ class GuidedAuthoringViewModel(
         }
     }
 
-    private fun saveManual() {
+    private fun saveManual(candidates: List<GuidedRuleCandidate>) {
         val draft = state.value.draft
         val compiled = GuidedSelectorCompiler.compile(draft.toSelectorDraft())
         val selector = when (compiled) {
@@ -651,7 +676,7 @@ class GuidedAuthoringViewModel(
             }
         }
         state.update { it.copy(saving = false) }
-        when (val duplicate = GuidedDuplicateCheck.find(duplicateCandidates(), selector)) {
+        when (val duplicate = GuidedDuplicateCheck.find(duplicateCandidates(candidates), selector)) {
             GuidedDuplicateResult.None -> persist(replaceRuleKey = null)
             is GuidedDuplicateResult.Found -> showDuplicate(duplicate)
         }
@@ -836,33 +861,17 @@ class GuidedAuthoringViewModel(
             .take(4)
     }
 
-    private fun duplicateCandidates(): List<GuidedRuleCandidate> {
+    private fun duplicateCandidates(all: List<GuidedRuleCandidate>): List<GuidedRuleCandidate> {
         val editingKey = state.value.editing?.ruleKey
         val editingGroup = state.value.editing?.groupKey
-        return state.value.candidates.filterNot { candidate ->
+        return all.filterNot { candidate ->
             candidate is GuidedRuleCandidate.App &&
                     candidate.ruleKey == editingKey &&
                     candidate.groupKey == editingGroup
         }
     }
 
-    fun canSave(): Boolean = canSaveState(state.value)
-
-    private fun canSaveState(state: GuidedAuthoringState): Boolean {
-        if (state.saving || state.draft.target.isEmpty()) return false
-        if (state.appId == null) return false
-        if (state.preview is GuidedPreviewState.Defect) return false
-        return state.draft.target.all { condition ->
-            when (condition) {
-                is GuidedCondition.Text -> condition.value.isNotBlank()
-                is GuidedCondition.Description -> condition.value.isNotBlank()
-                is GuidedCondition.ViewId -> condition.value.isNotBlank()
-                is GuidedCondition.FullId -> condition.value.isNotBlank()
-                is GuidedCondition.TypeName -> condition.value.isNotBlank()
-                GuidedCondition.Clickable, GuidedCondition.VisibleToUser -> true
-            }
-        }
-    }
+    fun canSave(): Boolean = state.value.canSave
 
     fun draftChanged(): Boolean = state.value.draft != baseline
 
