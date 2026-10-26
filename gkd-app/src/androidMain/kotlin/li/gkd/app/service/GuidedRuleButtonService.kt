@@ -28,7 +28,10 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
+import li.gkd.app.META
 import li.gkd.app.a11y.A11yRuntime
+import li.gkd.app.a11y.currentTopActivity
+import li.gkd.app.a11y.topActivityFlow
 import li.gkd.app.authoring.GuidedRecordingContext
 import li.gkd.app.authoring.GuidedRecordingPhase
 import li.gkd.app.authoring.GuidedRecordingSession
@@ -75,17 +78,23 @@ class GuidedRuleButtonService : OverlayWindowService(
     @Composable
     override fun ComposeContent() {
         val status by GuidedRecordingSession.status.collectAsState()
+        val topActivity by topActivityFlow.collectAsState(initial = currentTopActivity)
         val context = status.context
+        // GKD's own UI (authoring included) sits above the target app, so the floating
+        // capture entry is useless there; draw nothing to also avoid intercepting taps.
+        // The chip is a separate surface and stays visible for the live recording phase.
         if (status.phase == GuidedRecordingPhase.Idle || context == null) {
-            val alpha = 0.75f
-            GkIcon(
-                imageVector = GkIcons.Rule,
-                modifier = Modifier
-                    .clip(MaterialTheme.shapes.small)
-                    .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = alpha))
-                    .size(40.dp),
-                tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
-            )
+            if (topActivity.appId != META.appId) {
+                val alpha = 0.75f
+                GkIcon(
+                    imageVector = GkIcons.Rule,
+                    modifier = Modifier
+                        .clip(MaterialTheme.shapes.small)
+                        .background(MaterialTheme.colorScheme.primaryContainer.copy(alpha = alpha))
+                        .size(40.dp),
+                    tint = MaterialTheme.colorScheme.primary.copy(alpha = alpha),
+                )
+            }
         } else {
             GuidedRecordingChip(context)
         }
