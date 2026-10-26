@@ -19,7 +19,10 @@ data class GuidedRecordingStatus(
     val context: GuidedRecordingContext? = null,
     /** Activity the captured app showed when the phase came forward, once a named window state arrives. */
     val baselineActivityId: String? = null,
-)
+) {
+    /** Stop ends the session only while taps are still being accepted. */
+    val canStop: Boolean get() = phase == GuidedRecordingPhase.Recording
+}
 
 sealed interface GuidedRecordingSignal {
     data class Tap(val event: GuidedTapEvent) : GuidedRecordingSignal
@@ -51,8 +54,7 @@ object GuidedRecordingSession {
     }
 
     fun stop() {
-        val current = status.value
-        if (current.phase != GuidedRecordingPhase.Recording) return
+        if (!status.value.canStop) return
         status.value = GuidedRecordingStatus()
         signals.tryEmit(GuidedRecordingSignal.Stopped)
     }
