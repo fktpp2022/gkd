@@ -224,7 +224,7 @@ fun GuidedAuthoringPage(
     }
     GkBackHandler { handleBack() }
 
-    val editingName = state.editing?.candidate?.ruleName?.takeIf { it.isNotBlank() }
+    val editingName = state.editing?.ruleName?.takeIf { it.isNotBlank() }
         ?: state.appName
     val snapshotSource = if (vm.fromSnapshot) {
         stringResource(Res.string.guided_snapshot_preview, formatTimeAgo(vm.capturedAt))
