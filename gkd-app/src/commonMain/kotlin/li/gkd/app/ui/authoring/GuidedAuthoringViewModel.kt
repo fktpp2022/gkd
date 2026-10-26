@@ -1008,6 +1008,3 @@ class GuidedAuthoringViewModel(
         GuidedCaptureStore.clear()
     }
 }
-
-private fun List<NodeInfo>.hasUsableNode(): Boolean =
-    any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }

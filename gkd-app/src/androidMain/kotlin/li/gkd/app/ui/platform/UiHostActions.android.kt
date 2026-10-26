@@ -90,8 +90,6 @@ private suspend fun UiHost.captureTargetApp(appId: String): GuidedCapture? {
         null
     }
     return capture?.takeIf {
-        it.snapshot.appId == appId && it.snapshot.nodes.any { node ->
-            node.attr.visibleToUser && node.attr.width > 0 && node.attr.height > 0
-        }
+        it.snapshot.appId == appId && it.snapshot.nodes.hasUsableNode()
     }
 }
