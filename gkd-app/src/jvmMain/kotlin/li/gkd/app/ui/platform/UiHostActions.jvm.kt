@@ -34,3 +34,5 @@ actual suspend fun UiHost.captureAndStartGuidedRecording(
     appId: String,
     appName: String?,
 ): Boolean = false
+
+actual suspend fun UiHost.recaptureGuidedAuthoring(appId: String): Boolean = false

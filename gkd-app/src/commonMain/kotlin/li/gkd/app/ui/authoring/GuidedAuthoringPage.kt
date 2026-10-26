@@ -114,6 +114,7 @@ import li.gkd.app.ui.platform.UiHost
 import li.gkd.app.ui.platform.captureAndStartGuidedRecording
 import li.gkd.app.ui.platform.finishGuidedAuthoring
 import li.gkd.app.ui.platform.guidedRecordingSupported
+import li.gkd.app.ui.platform.recaptureGuidedAuthoring
 import li.gkd.app.ui.platform.startGuidedRecording
 import li.gkd.app.ui.text.formatTimeAgo
 import li.gkd.app.util.ToastUtils
@@ -171,6 +172,14 @@ fun GuidedAuthoringPage(
                 } else {
                     vm.recaptureFailed()
                 }
+            }
+        }
+    }
+    val retryCapture: () -> Unit = {
+        val appId = state.appId
+        if (appId != null) {
+            scope.launch {
+                vm.adoptRetryCapture(host.recaptureGuidedAuthoring(appId))
             }
         }
     }
@@ -297,7 +306,11 @@ fun GuidedAuthoringPage(
             when (state.phase) {
                 GuidedAuthoringPhase.DeadEnd -> GuidedDeadEndContent(
                     appId = state.appId,
-                    onBack = close,
+                    onRetry = if (state.canRetryCapture(liveCapture = !vm.fromSnapshot)) {
+                        retryCapture
+                    } else {
+                        null
+                    },
                     onDescribeManually = vm::startManual,
                     onAdvanced = {
                         if (state.appId != null) {
@@ -319,7 +332,7 @@ fun GuidedAuthoringPage(
                     if (snapshot == null) {
                         GuidedDeadEndContent(
                             appId = state.appId,
-                            onBack = close,
+                            onRetry = null,
                             onDescribeManually = vm::startManual,
                             onAdvanced = {
                                 if (state.appId != null) {
@@ -1481,7 +1494,7 @@ private fun GuidedExistingRow(
 @Composable
 private fun GuidedDeadEndContent(
     appId: String?,
-    onBack: () -> Unit,
+    onRetry: (() -> Unit)?,
     onDescribeManually: () -> Unit,
     onAdvanced: () -> Unit,
 ) {
@@ -1504,8 +1517,10 @@ private fun GuidedDeadEndContent(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Spacer(Modifier.height(24.dp))
-        Button(onClick = onBack, modifier = Modifier.fillMaxWidth()) {
-            Text(stringResource(Res.string.guided_try_again))
+        if (onRetry != null) {
+            Button(onClick = onRetry, modifier = Modifier.fillMaxWidth()) {
+                Text(stringResource(Res.string.guided_try_again))
+            }
         }
         OutlinedButton(
             onClick = onDescribeManually,

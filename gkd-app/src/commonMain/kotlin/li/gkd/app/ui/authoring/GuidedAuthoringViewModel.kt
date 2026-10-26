@@ -113,6 +113,12 @@ data class GuidedAuthoringState(
     val recordingFailure: GuidedRecordingFailure? = null,
     val recordSpent: Boolean = false,
 ) {
+    fun canRetryCapture(liveCapture: Boolean): Boolean =
+        phase == GuidedAuthoringPhase.DeadEnd && appId != null && liveCapture && !manual
+
+    fun afterRetryCapture(usable: Boolean): GuidedAuthoringState =
+        if (usable) copy(phase = GuidedAuthoringPhase.Picking) else this
+
     val canSave: Boolean
         get() {
             if (saving || draft.target.isEmpty() || appId == null) return false
@@ -206,6 +212,7 @@ class GuidedAuthoringViewModel(
     val hasCapture: Boolean get() = capture != null
     val hasPreview: Boolean get() = adapter != null
     val fromSnapshot: Boolean get() = capture?.fromSnapshot == true
+    val canRetryCapture: Boolean get() = state.value.canRetryCapture(liveCapture = !fromSnapshot)
     val capturedAt: Long get() = capture?.capturedAt ?: 0L
     val screenshot: ByteArray? get() = capture?.screenshot
     val snapshot: li.gkd.app.model.ComplexSnapshot? get() = capture?.snapshot
@@ -272,6 +279,21 @@ class GuidedAuthoringViewModel(
                 recordingFailure = null,
                 overlap = null,
             )
+        }
+    }
+
+    fun adoptRetryCapture(captured: Boolean) {
+        if (!canRetryCapture) return
+        val capture = if (captured) GuidedCaptureStore.current.value else null
+        val nodes = capture?.snapshot?.nodes?.takeIf { it.hasUsableNode() }
+        if (capture != null && nodes != null) {
+            this.capture = capture
+            adapter = SnapshotNodeAdapter(nodes)
+            this.nodes = nodes
+            usable = true
+            state.update { it.afterRetryCapture(usable = true) }
+        } else {
+            state.update { it.afterRetryCapture(usable = false) }
         }
     }
 
@@ -958,3 +980,6 @@ class GuidedAuthoringViewModel(
         GuidedCaptureStore.clear()
     }
 }
+
+private fun List<NodeInfo>.hasUsableNode(): Boolean =
+    any { it.attr.visibleToUser && it.attr.width > 0 && it.attr.height > 0 }

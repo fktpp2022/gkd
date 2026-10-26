@@ -12,3 +12,4 @@ expect fun UiHost.finishGuidedAuthoring()
 expect fun guidedRecordingSupported(): Boolean
 expect fun UiHost.startGuidedRecording(context: GuidedRecordingContext): Boolean
 expect suspend fun UiHost.captureAndStartGuidedRecording(appId: String, appName: String?): Boolean
+expect suspend fun UiHost.recaptureGuidedAuthoring(appId: String): Boolean
