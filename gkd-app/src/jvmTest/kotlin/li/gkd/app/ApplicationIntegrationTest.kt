@@ -17,12 +17,17 @@ import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
+import li.gkd.app.authoring.GuidedCondition
+import li.gkd.app.authoring.GuidedTextOperator
 import li.gkd.app.backup.BackupManager
 import li.gkd.app.crash.assertCrashReports
 import li.gkd.app.model.AppInfo
@@ -39,6 +44,7 @@ import li.gkd.app.subscription.RawSubscription
 import li.gkd.app.subscription.SubscriptionJson
 import li.gkd.app.subscription.SubscriptionRepository
 import li.gkd.app.ui.MainViewModel
+import li.gkd.app.ui.authoring.GuidedAuthoringViewModel
 import li.gkd.app.ui.component.ToastState
 import li.gkd.app.ui.home.BottomNavItem
 import li.gkd.app.ui.home.HomeState
@@ -151,6 +157,7 @@ class ApplicationIntegrationTest {
                 }
                 li.gkd.app.backup.assertBackupSnapshotConsistency()
                 assertBackupRoundTrip(appStorage())
+                assertGuidedSaveOutcomes()
             }
             assertFailsWith<IllegalStateException> { li.gkd.app.network.isNetworkRequestAllowed() }
             assertFailsWith<IllegalStateException> { li.gkd.app.app.openAppCatalog() }
@@ -558,6 +565,62 @@ class ApplicationIntegrationTest {
             owner.clear()
             Db.subsItemDao.deleteById(first.id, second.id)
             SettingsRepository.updateSettings { it.copy(subsPowerWarn = originalPowerWarning) }
+        }
+    }
+
+    // Closing the session while saving cancels quietly, while a real write failure stays retryable.
+    private suspend fun assertGuidedSaveOutcomes() = withContext(Dispatchers.Main.immediate) {
+        val id = SubscriptionIds.LOCAL
+        val previous = SubscriptionRepository.awaitSnapshot().subscriptions.getValue(id)
+        try {
+            val cancelledOwner = ViewModelStore()
+            val cancelled = GuidedAuthoringViewModel("test.alpha")
+                .also { cancelledOwner.put("guided-cancel", it) }
+            try {
+                withTimeout(5_000) { cancelled.state.first { it.appName != null } }
+                cancelled.startManual()
+                cancelled.addCondition(
+                    GuidedCondition.Text(GuidedTextOperator.Is, "ticket-10-cancel"),
+                )
+                cancelled.setName("Ticket 10 cancel")
+                cancelled.requestSave()
+                // Let the save reach its in-flight write before the session disappears.
+                yield()
+                assertTrue(cancelled.state.value.saving)
+                cancelled.closeSession()
+            } finally {
+                cancelledOwner.clear()
+            }
+            withTimeout(5_000) { cancelled.scope.coroutineContext[Job]!!.join() }
+            assertFalse(cancelled.state.value.saveError)
+            assertFalse(cancelled.saved.value)
+
+            val file = appStorage().subscription.resolve("$id.json")
+            val previousBytes = file.readBytes()
+            check(file.delete() && file.mkdirs())
+            file.resolve("occupied").apply { writeText("blocked") }
+            val failedOwner = ViewModelStore()
+            val failed = GuidedAuthoringViewModel("test.alpha")
+                .also { failedOwner.put("guided-failure", it) }
+            try {
+                withTimeout(5_000) { failed.state.first { it.appName != null } }
+                failed.startManual()
+                failed.addCondition(
+                    GuidedCondition.Text(GuidedTextOperator.Is, "ticket-10-failure"),
+                )
+                failed.setName("Ticket 10 failure")
+                val draft = failed.state.value.draft
+                failed.requestSave()
+                withTimeout(5_000) { failed.state.first { it.saveError } }
+                assertEquals(draft, failed.state.value.draft)
+                assertFalse(failed.saved.value)
+            } finally {
+                failedOwner.clear()
+                file.deleteRecursively()
+                file.writeBytes(previousBytes)
+            }
+        } finally {
+            SubscriptionRepository.update(id) { previous }
         }
     }
 

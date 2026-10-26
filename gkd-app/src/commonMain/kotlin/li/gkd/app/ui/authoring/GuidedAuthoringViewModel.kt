@@ -1,6 +1,7 @@
 package li.gkd.app.ui.authoring
 
 import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -769,6 +770,8 @@ class GuidedAuthoringViewModel(
                         }
                     }
                 }
+            }.onFailure { cause ->
+                if (cause is CancellationException) throw cause
             }
             if (completed.isSuccess && failure == null) {
                 GuidedCaptureStore.clear()
