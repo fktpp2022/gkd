@@ -8,6 +8,8 @@ import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import li.gkd.app.snapshot.SnapshotNodeAdapter
 import li.gkd.app.subscription.RawSubscription
+import li.gkd.app.ui.authoring.GuidedAuthoringPhase
+import li.gkd.app.ui.authoring.GuidedAuthoringState
 import li.gkd.db.SubsAppConfig
 import li.gkd.db.SubsAppGroupConfig
 import li.gkd.db.SubsItem
@@ -408,6 +410,71 @@ class GuidedAuthoringStateTest {
             ),
         )
     }
+
+    @Test
+    fun saveStaysDisabledUntilTheLocalRuleScanCompletes() {
+        assertFalse(saveState(scan = GuidedRuleScan.Pending, manual = true).canSave)
+        assertFalse(saveState(scan = GuidedRuleScan.Pending, manual = false).canSave)
+    }
+
+    @Test
+    fun completedScanWithRulesFeedsTheDuplicateCheck() {
+        val candidate = GuidedRuleCandidates.fromGroup(
+            testAppGroup(
+                name = "My rules",
+                rules = listOf(testAppRule(key = 4, matches = listOf("[text=\"OK\"]"))),
+            ),
+            "My rules",
+        ).single()
+        val scan = assertIs<GuidedRuleScan.Ready>(scanGuidedRules { listOf(candidate) })
+        assertTrue(saveState(scan = scan).canSave)
+        val plan = assertIs<GuidedSavePlanResult.Ready>(
+            GuidedSavePlanner.plan(
+                draft = draft(GuidedCondition.Text(GuidedTextOperator.Is, "OK")),
+                actable = nodes[6],
+                adapter = adapter,
+                candidates = scan.candidates,
+            ),
+        ).plan
+        val duplicate = assertIs<GuidedDuplicateResult.Found>(plan.duplicate)
+        assertEquals(4, duplicate.candidate.ruleKey)
+    }
+
+    @Test
+    fun scanFailurePublishesNoCandidatesAndKeepsSaveDisabled() {
+        val scan = scanGuidedRules { error("broken rule") }
+        assertEquals(GuidedRuleScan.Failed, scan)
+        assertFalse(saveState(scan = scan).canSave)
+    }
+
+    @Test
+    fun completedScanWithoutRulesEnablesSaveAndFindsNoDuplicate() {
+        val scan = assertIs<GuidedRuleScan.Ready>(scanGuidedRules { emptyList() })
+        assertTrue(scan.candidates.isEmpty())
+        assertTrue(saveState(scan = scan).canSave)
+        val plan = assertIs<GuidedSavePlanResult.Ready>(
+            GuidedSavePlanner.plan(
+                draft = draft(GuidedCondition.Text(GuidedTextOperator.Is, "OK")),
+                actable = nodes[6],
+                adapter = adapter,
+                candidates = scan.candidates,
+            ),
+        ).plan
+        assertEquals(GuidedMatchScope.One, plan.scope)
+        assertEquals(GuidedDuplicateResult.None, plan.duplicate)
+    }
+
+    private fun saveState(
+        scan: GuidedRuleScan,
+        manual: Boolean = true,
+    ): GuidedAuthoringState = GuidedAuthoringState(
+        phase = GuidedAuthoringPhase.Editing,
+        appId = appId,
+        appName = "Example",
+        draft = GuidedRuleDraft().addCondition(GuidedCondition.Text(GuidedTextOperator.Is, "OK")),
+        manual = manual,
+        scan = scan,
+    )
 
     private fun draft(condition: GuidedCondition) =
         GuidedRuleDraft().addCondition(condition).toSelectorDraft()
