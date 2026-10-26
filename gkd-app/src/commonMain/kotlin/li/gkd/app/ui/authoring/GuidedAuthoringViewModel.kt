@@ -47,7 +47,6 @@ import li.gkd.app.authoring.GuidedRuleEligibility
 import li.gkd.app.authoring.GuidedRuleReadResult
 import li.gkd.app.authoring.GuidedRuleReader
 import li.gkd.app.authoring.GuidedRuleScope
-import li.gkd.app.authoring.GuidedRuleScan
 import li.gkd.app.authoring.GuidedRuleWriteFailure
 import li.gkd.app.authoring.GuidedRuleWriteRequest
 import li.gkd.app.authoring.GuidedRuleWriteResult
@@ -97,7 +96,7 @@ data class GuidedAuthoringState(
     val draft: GuidedRuleDraft = GuidedRuleDraft(),
     val pick: GuidedPick? = null,
     val preview: GuidedPreviewState = GuidedPreviewState.NoPreview,
-    val scan: GuidedRuleScan = GuidedRuleScan.Pending,
+    val scan: Loadable<List<GuidedRuleCandidate>> = Loadable.Loading,
     val existingHits: List<GuidedExistingRuleHit> = emptyList(),
     val existingDismissed: Boolean = true,
     val editing: GuidedRuleCandidate.App? = null,
@@ -117,13 +116,17 @@ data class GuidedAuthoringState(
         phase == GuidedAuthoringPhase.DeadEnd && appId != null && liveCapture && !manual
 
     fun afterRetryCapture(usable: Boolean): GuidedAuthoringState =
-        if (usable) copy(phase = GuidedAuthoringPhase.Picking) else this
+        if (usable) {
+            copy(phase = GuidedAuthoringPhase.Picking, scan = Loadable.Loading)
+        } else {
+            this
+        }
 
     val canSave: Boolean
         get() {
             if (saving || draft.target.isEmpty() || appId == null) return false
             if (preview is GuidedPreviewState.Defect) return false
-            if (scan !is GuidedRuleScan.Ready) return false
+            if (scan !is Loadable.Ready) return false
             return draft.target.all { condition ->
                 when (condition) {
                     is GuidedCondition.Text -> condition.value.isNotBlank()
@@ -175,6 +178,7 @@ class GuidedAuthoringViewModel(
     private var recordingWaitJob: Job? = null
     private var pendingRecordedAction: GuidedRuleAction? = null
     private var screenChangedWhileResolving = false
+    private val captureRevision = MutableStateFlow(0)
 
     private val initialPhase = when {
         startManualAppId != null -> GuidedAuthoringPhase.Editing
@@ -213,7 +217,7 @@ class GuidedAuthoringViewModel(
     val hasCapture: Boolean get() = capture != null
     val hasPreview: Boolean get() = adapter != null
     val fromSnapshot: Boolean get() = capture?.fromSnapshot == true
-    val canRetryCapture: Boolean get() = state.value.canRetryCapture(liveCapture = !fromSnapshot)
+    private val canRetryCapture: Boolean get() = state.value.canRetryCapture(liveCapture = !fromSnapshot)
     val capturedAt: Long get() = capture?.capturedAt ?: 0L
     val screenshot: ByteArray? get() = capture?.screenshot
     val snapshot: li.gkd.app.model.ComplexSnapshot? get() = capture?.snapshot
@@ -293,6 +297,7 @@ class GuidedAuthoringViewModel(
             this.nodes = nodes
             usable = true
             state.update { it.afterRetryCapture(usable = true) }
+            captureRevision.value++
         } else {
             state.update { it.afterRetryCapture(usable = false) }
         }
@@ -358,7 +363,8 @@ class GuidedAuthoringViewModel(
             SubscriptionConfigStore.observe(),
             AppInfoRepository.appInfoMapFlow,
             launcherAppIdFlow,
-        ) { loaded, configs, apps, launcher ->
+            captureRevision,
+        ) { loaded, configs, apps, launcher, _ ->
             RuleScopeInput(loaded, configs, apps, launcher)
         }.collect { input ->
             val loaded = input.loaded
@@ -388,10 +394,10 @@ class GuidedAuthoringViewModel(
                     notice = GuidedSaveNotices.resolve(scope, authoringGroupName),
                 )
             }
-            if (scan is GuidedRuleScan.Ready) {
+            if (scan is Loadable.Ready) {
                 val pick = state.value.pick
                 if (pick != null && !state.value.manual && state.value.editing == null) {
-                    detectExisting(pick, scan.candidates)
+                    detectExisting(pick, scan.value)
                 }
             }
         }
@@ -445,8 +451,8 @@ class GuidedAuthoringViewModel(
         }
         refreshPreview()
         val scan = state.value.scan
-        if (scan is GuidedRuleScan.Ready) {
-            detectExisting(pick, scan.candidates)
+        if (scan is Loadable.Ready) {
+            detectExisting(pick, scan.value)
         }
     }
 
@@ -572,9 +578,10 @@ class GuidedAuthoringViewModel(
     private fun refreshBroad() {
         val adapter = adapter ?: return
         val pick = state.value.pick ?: return
-        val scan = state.value.scan as? GuidedRuleScan.Ready ?: return
+        val scan = state.value.scan
+        if (scan !is Loadable.Ready) return
         val draft = state.value.draft
-        val candidates = duplicateCandidates(scan.candidates)
+        val candidates = duplicateCandidates(scan.value)
         broadJob?.cancel()
         broadJob = viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
@@ -685,16 +692,17 @@ class GuidedAuthoringViewModel(
     fun requestSave() {
         val current = state.value
         if (!current.canSave || persistJob?.isActive == true) return
-        val scan = current.scan as? GuidedRuleScan.Ready ?: return
+        val scan = current.scan
+        if (scan !is Loadable.Ready) return
         state.update { it.copy(saving = true, saveError = false) }
         val adapter = adapter
         if (current.manual || adapter == null || current.pick == null) {
-            saveManual(scan.candidates)
+            saveManual(scan.value)
             return
         }
         val draft = current.draft
         val actable = current.pick.actable
-        val candidates = duplicateCandidates(scan.candidates)
+        val candidates = duplicateCandidates(scan.value)
         viewModelScope.launch {
             val result = withContext(Dispatchers.Default) {
                 GuidedSavePlanner.plan(draft.toSelectorDraft(), actable, adapter, candidates)

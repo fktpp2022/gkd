@@ -1,6 +1,7 @@
 package li.gkd.app.authoring
 
 import kotlinx.coroutines.CancellationException
+import li.gkd.app.state.Loadable
 import li.gkd.app.subscription.RawSubscription
 
 sealed interface GuidedRuleCandidate {
@@ -27,18 +28,12 @@ sealed interface GuidedRuleCandidate {
     }
 }
 
-sealed interface GuidedRuleScan {
-    data object Pending : GuidedRuleScan
-    data class Ready(val candidates: List<GuidedRuleCandidate>) : GuidedRuleScan
-    data object Failed : GuidedRuleScan
-}
-
-fun scanGuidedRules(scan: () -> List<GuidedRuleCandidate>): GuidedRuleScan {
+fun scanGuidedRules(scan: () -> List<GuidedRuleCandidate>): Loadable<List<GuidedRuleCandidate>> {
     return try {
-        GuidedRuleScan.Ready(scan())
+        Loadable.Ready(scan())
     } catch (e: CancellationException) {
         throw e
-    } catch (_: Exception) {
-        GuidedRuleScan.Failed
+    } catch (e: Exception) {
+        Loadable.Failure(e)
     }
 }

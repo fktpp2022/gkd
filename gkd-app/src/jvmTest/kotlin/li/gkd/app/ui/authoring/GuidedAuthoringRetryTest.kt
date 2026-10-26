@@ -4,6 +4,7 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
+import li.gkd.app.state.Loadable
 
 class GuidedAuthoringRetryTest {
     private fun deadEnd(
@@ -39,6 +40,7 @@ class GuidedAuthoringRetryTest {
         assertEquals("com.example", next.appId)
         assertEquals("com.example", next.appName)
         assertFalse(next.manual)
+        assertEquals(Loadable.Loading, next.scan)
     }
 
     @Test
