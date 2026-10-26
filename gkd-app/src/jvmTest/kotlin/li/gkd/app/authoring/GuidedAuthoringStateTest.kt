@@ -346,6 +346,38 @@ class GuidedAuthoringStateTest {
     }
 
     @Test
+    fun aContextThatStaysAmbiguousReopensBroadButUniqueOrEmptyContextsDoNot() {
+        val ambiguous = plan(
+            draft(
+                GuidedCondition.TypeName("android.widget.TextView"),
+                insideContext(GuidedCondition.ViewId("settings_list")),
+            ),
+            actable = nodes[2],
+        )
+        assertEquals(2, assertIs<GuidedSavePlanResult.Ready>(ambiguous).plan.matchCount)
+        assertEquals(2, ambiguous.broadPlan()?.matchCount)
+
+        val unique = plan(
+            draft(
+                GuidedCondition.Text(GuidedTextOperator.Is, "Wi-Fi"),
+                insideContext(GuidedCondition.ViewId("settings_list")),
+            ),
+            actable = nodes[2],
+        )
+        assertNull(unique.broadPlan())
+
+        val empty = plan(
+            draft(
+                GuidedCondition.Text(GuidedTextOperator.Is, "Missing"),
+                insideContext(GuidedCondition.ViewId("settings_list")),
+            ),
+            actable = nodes[6],
+        )
+        assertNull(empty.broadPlan())
+        assertTrue(assertIs<GuidedSavePlanResult.Ready>(empty).plan.matches.isEmpty())
+    }
+
+    @Test
     fun reportsWhenTheRuleWillNotRun() {
         assertEquals(
             GuidedSaveNotice.None,
@@ -478,6 +510,19 @@ class GuidedAuthoringStateTest {
 
     private fun draft(condition: GuidedCondition) =
         GuidedRuleDraft().addCondition(condition).toSelectorDraft()
+
+    private fun draft(condition: GuidedCondition, context: GuidedContext) =
+        GuidedRuleDraft().addCondition(condition).copy(context = context).toSelectorDraft()
+
+    private fun insideContext(anchor: GuidedCondition.Identifier) = GuidedContext(
+        relation = GuidedContextRelation.Inside,
+        anchor = listOf(anchor),
+    )
+
+    private fun plan(
+        draft: GuidedSelectorDraft,
+        actable: li.gkd.app.model.NodeInfo,
+    ): GuidedSavePlanResult = GuidedSavePlanner.plan(draft, actable, adapter, emptyList())
 
     private fun preview(
         draft: GuidedSelectorDraft,
