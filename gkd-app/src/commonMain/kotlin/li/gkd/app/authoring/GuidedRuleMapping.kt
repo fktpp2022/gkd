@@ -33,10 +33,6 @@ data class GuidedRuleWriteRequest(
 sealed class GuidedRuleWriteResult {
     data class Success(
         val subscription: RawSubscription,
-        val groupKey: Int,
-        val ruleKey: Int,
-        val createdGroup: Boolean,
-        val replaced: Boolean,
     ) : GuidedRuleWriteResult()
 
     data class Failure(val reason: GuidedRuleWriteFailure) : GuidedRuleWriteResult()
@@ -72,9 +68,7 @@ object GuidedRuleWriter {
         val group = app.groups.getOrNull(groupIndex)
 
         val replacementKey = request.replaceRuleKey
-        val written: WrittenRule
         val newGroup: RawSubscription.RawAppGroup
-        val createdGroup: Boolean
         if (replacementKey != null) {
             val ruleIndex = group?.rules?.indexOfFirst { it.key == replacementKey } ?: -1
             if (group == null || ruleIndex < 0) {
@@ -83,8 +77,6 @@ object GuidedRuleWriter {
             val replacedRule = rewriteRule(group.rules[ruleIndex], request, canonical)
             val rules = group.rules.toMutableList().apply { set(ruleIndex, replacedRule) }
             newGroup = group.copy(rules = rules)
-            written = WrittenRule(replacementKey, replaced = true)
-            createdGroup = false
         } else {
             val ruleKey = nextRuleKey(group?.rules.orEmpty())
             val rule = newRule(ruleKey, request, canonical)
@@ -97,8 +89,6 @@ object GuidedRuleWriter {
             } else {
                 group.copy(rules = group.rules + rule)
             }
-            written = WrittenRule(ruleKey, replaced = false)
-            createdGroup = group == null
         }
 
         val groups = if (group == null) {
@@ -114,14 +104,8 @@ object GuidedRuleWriter {
         }
         return GuidedRuleWriteResult.Success(
             subscription = current.copy(apps = apps),
-            groupKey = newGroup.key,
-            ruleKey = written.key,
-            createdGroup = createdGroup,
-            replaced = written.replaced,
         )
     }
-
-    private data class WrittenRule(val key: Int, val replaced: Boolean)
 
     private fun rewriteRule(
         rule: RawSubscription.RawAppRule,

@@ -170,7 +170,7 @@ class GuidedExistingRuleTest {
             ),
         )
         val hits = GuidedExistingRuleDetector.detect(
-            GuidedRuleCandidates.fromGroup(group, "My rules"),
+            testCandidates(listOf(group)),
             picked,
             nodes,
             adapter,
@@ -306,10 +306,7 @@ class GuidedExistingRuleTest {
         rule: RawSubscription.RawAppRule,
         picked: NodeInfo = this.picked,
     ): List<GuidedExistingRuleHit> = GuidedExistingRuleDetector.detect(
-        candidates = GuidedRuleCandidates.fromGroup(
-            testAppGroup(rules = listOf(rule)),
-            "My rules",
-        ),
+        candidates = testCandidates(listOf(testAppGroup(rules = listOf(rule)))),
         picked = picked,
         nodes = nodes,
         adapter = adapter,

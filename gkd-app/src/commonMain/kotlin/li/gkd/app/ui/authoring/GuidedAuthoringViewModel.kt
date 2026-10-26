@@ -87,10 +87,6 @@ sealed interface GuidedPreviewState {
     data object Defect : GuidedPreviewState
 }
 
-data class GuidedEditingState(
-    val candidate: GuidedRuleCandidate.App,
-)
-
 data class GuidedAuthoringState(
     val phase: GuidedAuthoringPhase,
     val appId: String?,
@@ -101,7 +97,7 @@ data class GuidedAuthoringState(
     val candidates: List<GuidedRuleCandidate> = emptyList(),
     val existingHits: List<GuidedExistingRuleHit> = emptyList(),
     val existingDismissed: Boolean = true,
-    val editing: GuidedEditingState? = null,
+    val editing: GuidedRuleCandidate.App? = null,
     val notice: GuidedSaveNotice = GuidedSaveNotice.None,
     val contextError: Boolean = false,
     val dynamicText: Boolean = false,
@@ -118,7 +114,6 @@ data class GuidedAuthoringState(
 enum class GuidedDuplicateKind { Replaceable, AuthoringAdvanced, Foreign }
 
 data class GuidedDuplicateState(
-    val plan: GuidedSavePlan?,
     val candidate: GuidedRuleCandidate,
     val kind: GuidedDuplicateKind,
 )
@@ -540,7 +535,7 @@ class GuidedAuthoringViewModel(
                 phase = GuidedAuthoringPhase.Editing,
                 draft = draft,
                 nameEdited = true,
-                editing = GuidedEditingState(candidate),
+                editing = candidate,
                 existingDismissed = true,
                 saveError = false,
                 contextMode = null,
@@ -658,7 +653,7 @@ class GuidedAuthoringViewModel(
         state.update { it.copy(saving = false) }
         when (val duplicate = GuidedDuplicateCheck.find(duplicateCandidates(), selector)) {
             GuidedDuplicateResult.None -> persist(replaceRuleKey = null)
-            is GuidedDuplicateResult.Found -> showDuplicate(plan = null, duplicate)
+            is GuidedDuplicateResult.Found -> showDuplicate(duplicate)
         }
     }
 
@@ -688,11 +683,11 @@ class GuidedAuthoringViewModel(
     private fun handleDuplicate(plan: GuidedSavePlan) {
         when (val duplicate = plan.duplicate) {
             GuidedDuplicateResult.None -> persist(replaceRuleKey = null)
-            is GuidedDuplicateResult.Found -> showDuplicate(plan, duplicate)
+            is GuidedDuplicateResult.Found -> showDuplicate(duplicate)
         }
     }
 
-    private fun showDuplicate(plan: GuidedSavePlan?, duplicate: GuidedDuplicateResult.Found) {
+    private fun showDuplicate(duplicate: GuidedDuplicateResult.Found) {
         val candidate = duplicate.candidate
         val kind = when {
             candidate is GuidedRuleCandidate.App && candidate.inAuthoringGroup && duplicate.canReplace ->
@@ -703,7 +698,7 @@ class GuidedAuthoringViewModel(
 
             else -> GuidedDuplicateKind.Foreign
         }
-        this.duplicate.value = GuidedDuplicateState(plan, candidate, kind)
+        this.duplicate.value = GuidedDuplicateState(candidate, kind)
     }
 
     fun replaceDuplicate() {
@@ -744,7 +739,7 @@ class GuidedAuthoringViewModel(
             return
         }
         val draft = current.draft
-        val editingKey = current.editing?.candidate?.ruleKey
+        val editingKey = current.editing?.ruleKey
         val label = current.pick?.actable?.let(GuidedNodeLabel::of)
         state.update { it.copy(saving = true, saveError = false) }
         val required = RequiredSubscription(SubscriptionIds.LOCAL, viewModelScope)
@@ -840,8 +835,8 @@ class GuidedAuthoringViewModel(
     }
 
     private fun duplicateCandidates(): List<GuidedRuleCandidate> {
-        val editingKey = state.value.editing?.candidate?.ruleKey
-        val editingGroup = state.value.editing?.candidate?.groupKey
+        val editingKey = state.value.editing?.ruleKey
+        val editingGroup = state.value.editing?.groupKey
         return state.value.candidates.filterNot { candidate ->
             candidate is GuidedRuleCandidate.App &&
                     candidate.ruleKey == editingKey &&
