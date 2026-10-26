@@ -9,6 +9,7 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
@@ -122,7 +123,30 @@ class GuidedRecordingSessionTest {
         GuidedRecordingSession.start(context)
         GuidedRecordingSession.stop()
         assertEquals(GuidedRecordingPhase.Idle, GuidedRecordingSession.phase)
+        assertNull(GuidedRecordingSession.status.value.context)
+        assertFalse(GuidedRecordingSession.isPaused)
         assertEquals(listOf(GuidedRecordingSignal.Stopped), signals)
+    }
+
+    @Test
+    fun stopIsOfferedOnlyWhileRecording() = runTest {
+        GuidedRecordingSession.start(context)
+        assertTrue(GuidedRecordingSession.status.value.canStop)
+        GuidedRecordingSession.onTap(tap())
+        assertEquals(GuidedRecordingPhase.Resolving, GuidedRecordingSession.phase)
+        assertFalse(GuidedRecordingSession.status.value.canStop)
+    }
+
+    @Test
+    fun stopWhileResolvingIsIgnored() = runTest {
+        val signals = collectSignals()
+        val event = tap()
+        GuidedRecordingSession.start(context)
+        GuidedRecordingSession.onTap(event)
+        GuidedRecordingSession.stop()
+        assertEquals(GuidedRecordingPhase.Resolving, GuidedRecordingSession.phase)
+        assertTrue(GuidedRecordingSession.isPaused)
+        assertEquals(listOf(GuidedRecordingSignal.Tap(event)), signals)
     }
 
     private fun TestScope.collectSignals(): List<GuidedRecordingSignal> {
