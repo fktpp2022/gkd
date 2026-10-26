@@ -70,6 +70,8 @@ class GuidedRuleButtonService : OverlayWindowService(
     override fun isViewClickEnabled(): Boolean =
         GuidedRecordingSession.phase == GuidedRecordingPhase.Idle
 
+    suspend fun <T> hideSurfacesWhile(block: suspend () -> T): T = withAllOverlaysHidden(block)
+
     override fun onLongClickView() {
         if (GuidedRecordingSession.phase != GuidedRecordingPhase.Idle) return
         stopSelf()
@@ -173,11 +175,22 @@ class GuidedRuleButtonService : OverlayWindowService(
         }
     }
 
+    init {
+        onCreated { active = this }
+        onDestroyed { if (active === this) active = null }
+    }
+
     companion object {
+        @Volatile
+        private var active: GuidedRuleButtonService? = null
+
         val isRunning: StateFlow<Boolean>
             field = MutableStateFlow(false)
 
         private var stopAfterRecording = false
+
+        suspend fun <T> withSurfacesHidden(block: suspend () -> T): T =
+            active?.hideSurfacesWhile(block) ?: block()
 
         fun start() {
             if (!PermissionStates.drawOverlays.checkOrToast()) return

@@ -82,7 +82,9 @@ private suspend fun UiHost.captureTargetApp(appId: String): GuidedCapture? {
         }
     }
     val capture = try {
-        GuidedCaptureHost.capture()
+        GuidedRuleButtonService.withSurfacesHidden {
+            GuidedCaptureHost.capture()
+        }
     } catch (e: CancellationException) {
         throw e
     } catch (e: Throwable) {
