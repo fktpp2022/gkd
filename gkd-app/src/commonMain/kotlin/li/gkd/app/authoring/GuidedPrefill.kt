@@ -7,8 +7,7 @@ import li.gkd.selector.SelectorCompileResult
 
 data class GuidedPrefill(
     val target: List<GuidedCondition.Identifier>,
-    val selector: String,
-    val matchCount: Int,
+    val context: GuidedContext?,
     val dynamicText: Boolean,
 )
 
@@ -25,9 +24,52 @@ enum class GuidedPrefillFailure {
 object GuidedPrefillBuilder {
     fun build(node: NodeInfo, adapter: SnapshotNodeAdapter): GuidedPrefillResult {
         val root = adapter.root ?: return failure(GuidedPrefillFailure.NoTree)
+        val ladder = ladder(node, adapter, root) ?: return failure(GuidedPrefillFailure.NoIdentifier)
+        val context = if (ladder.matchCount > 1) {
+            insideContext(node, ladder.target, adapter, root)
+        } else {
+            null
+        }
+        return GuidedPrefillResult.Success(
+            GuidedPrefill(
+                target = ladder.target,
+                context = context,
+                dynamicText = ladder.dynamicText,
+            ),
+        )
+    }
+
+    fun identifiers(node: NodeInfo, adapter: SnapshotNodeAdapter): List<GuidedCondition.Identifier> {
+        val root = adapter.root ?: return emptyList()
+        return ladder(node, adapter, root)?.target.orEmpty()
+    }
+
+    private fun insideContext(
+        node: NodeInfo,
+        target: List<GuidedCondition.Identifier>,
+        adapter: SnapshotNodeAdapter,
+        root: NodeInfo,
+    ): GuidedContext? {
+        var current = node
+        while (true) {
+            current = adapter.getParent(current) ?: return null
+            val anchor = identifiers(current, adapter).firstOrNull() ?: continue
+            val context = GuidedContext(GuidedContextRelation.Inside, listOf(anchor))
+            val compiled = GuidedSelectorCompiler.compile(
+                GuidedSelectorDraft(target, context),
+            ) as? GuidedSelectorCompileResult.Success ?: return null
+            return context.takeIf { countMatches(root, adapter, compiled.selector) == 1 }
+        }
+    }
+
+    private fun ladder(
+        node: NodeInfo,
+        adapter: SnapshotNodeAdapter,
+        root: NodeInfo,
+    ): Ladder? {
         val identifiers = mutableListOf<GuidedCondition.Identifier>()
         var identifierRows = 0
-        var selector: String? = null
+        var compiled = false
         var matchCount = 0
         var dynamicText = false
 
@@ -35,26 +77,19 @@ object GuidedPrefillBuilder {
             if (candidate.condition !is GuidedCondition.TypeName && identifierRows >= MAX_IDENTIFIERS) {
                 continue
             }
-            val compiled = GuidedSelectorCompiler.compile(
+            val result = GuidedSelectorCompiler.compile(
                 GuidedSelectorDraft(identifiers + candidate.condition),
             ) as? GuidedSelectorCompileResult.Success ?: continue
-            val count = countMatches(root, adapter, compiled.selector)
+            val count = countMatches(root, adapter, result.selector)
             identifiers += candidate.condition
             if (candidate.condition !is GuidedCondition.TypeName) identifierRows++
-            selector = compiled.selector
+            compiled = true
             matchCount = count
             dynamicText = dynamicText || candidate.dynamic
             if (count == 1) break
         }
-        if (selector == null) return failure(GuidedPrefillFailure.NoIdentifier)
-        return GuidedPrefillResult.Success(
-            GuidedPrefill(
-                target = identifiers,
-                selector = selector,
-                matchCount = matchCount,
-                dynamicText = dynamicText,
-            ),
-        )
+        if (!compiled) return null
+        return Ladder(identifiers, matchCount, dynamicText)
     }
 
     private fun countMatches(
@@ -139,6 +174,12 @@ object GuidedPrefillBuilder {
     private data class Candidate(
         val condition: GuidedCondition.Identifier,
         val dynamic: Boolean,
+    )
+
+    private data class Ladder(
+        val target: List<GuidedCondition.Identifier>,
+        val matchCount: Int,
+        val dynamicText: Boolean,
     )
 
     private enum class Kind { Text, ViewId, FullId, Description, Type }
