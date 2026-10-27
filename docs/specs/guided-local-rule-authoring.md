@@ -240,13 +240,13 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - Summary: "Selected: “<label>”" and the resolved action target when it differs ("Acting on the button around this text").
 - Actions: **Use this**, **Choose again**.
 - If the picked node is not clickable and has no usable text/description, the actable node is the nearest clickable ancestor; this is stated, not hidden.
-- Accessibility alternative: **Choose from a list** lists labeled nodes in screen order with their indent; selecting one behaves like a pick. If the list is empty, route to A14.
+- Accessibility alternative: **Choose from a list** lists labeled nodes in screen order with their indent; selecting one behaves like a pick. When the capture has no labeled node, the sheet lists nothing and offers **Describe manually** as its primary action instead; that opens A14 for the session's app, with the captured tree available for label typeahead only and no preview or context.
 - In a live-capture session, A2 also offers **Record**: a single top-bar icon (a record dot), accessible name "Record a tap". It appears only after the picker has usable nodes, is absent from A9 and from A3 onward, and starts A15 immediately with no confirmation sheet. It is hidden for the rest of the authoring session after a demonstration succeeds and returns after a failed attempt. Picking remains the primary path.
 - More than one candidate at the point: A2b.
 
 ### 6.5 A2b — Which element?
 
-- Candidates are the smallest meaningful nodes at the point, sorted smallest-first; the smallest clickable node with text is preselected.
+- Candidates are the smallest meaningful nodes at the point, sorted smallest-first; the smallest clickable node with text is preselected. When no candidate has text, the smallest candidate is preselected.
 - Each row: label (text → desc → type), type, size. Selecting a row draws its bounds behind the sheet.
 - Actions: Use this, Cancel.
 
@@ -263,6 +263,8 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - Options (collapsed): the limits option, the rule name (auto-suggested, editable), and Advanced → the read-only canonical selector.
 - Overflow: **Edit as JSON** (A11). Not part of the basic path.
 - Save:
+  - Save stays disabled until the existing-rule scan completes, and stays disabled if the scan fails. The conditions screen and A14 show the same gate.
+  - Scan failure → an inline banner (not a modal, not a toast) with the failure copy and **Retry**, in place of the existing-rule banner. A failure is never rendered as an empty rule list. Retry re-runs the scan without re-capturing; once it completes, Save behaves exactly like the completed-scan path, including the zero-candidate path.
   - 0 matches → A8 inline, primary button becomes "Save anyway".
   - 1 match → duplicate check (A7 if needed) → save.
   - N > 1 → A4 broad sheet before saving.
@@ -351,8 +353,10 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 ### 6.17 A14 — Manual condition editor
 
 - Same rows and options as A3, without a screenshot or a pick.
+- Entered from A9 **Describe manually**, or from A2's **Choose from a list** sheet when the capture has no labeled node; both keep the session's app id.
 - Add condition works as usual; Next to/Inside require a captured tree, so the context action is unavailable here.
-- If a captured or stored tree is available, the typeahead uses its labels; otherwise it is empty. There is no preview when the session has no screenshot.
+- There is never a preview here, even when the session holds a screenshot: the preview card shows its unavailable state.
+- If a captured or stored tree is available, the typeahead uses its labels; otherwise it is empty. That tree feeds typeahead only and is not otherwise surfaced.
 - Save performs the duplicate check; the existing-rule banner is unavailable without a tree.
 - Saved rules are identical in shape to picked rules.
 
@@ -629,7 +633,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 - Off means: no timing fields. The engine's default `actionCd` (1000 ms) is the only throttle; a persistent target can be acted on roughly once per second until it disappears.
 - A rule saved mid-session with the option on may not fire until the app is opened again; this is expected and is consistent with the copy. There is no "try it now" in v1.
 - Copy: "Only act right after the app opens", helper "Stops 10 seconds after the app opens, or after one tap." The option is offered, never applied silently.
-- Recommendation in the UI is explicit: splash screens may benefit; later screens will time out.
+- Recommendation in the UI is explicit and shown with the option: "Best for splash screens; later screens will time out." The helper stays as additional information.
 
 ### 9.6 Fields the guided flow never writes
 
@@ -651,6 +655,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 - `preKeys` rules are tested on primary selectors only; the banner is advisory, not proof that the trigger happened.
 - Ordering: authoring group → other local app groups → local global groups. The banner names the first; "+N more" lists the rest.
 - Re-runs on a new pick; a dismissal applies to that pick only.
+- If the scan fails, the existing-rule banner is replaced by an inline failure banner with **Retry**. Save stays disabled until a retry completes; a failure is never shown as "no existing rules". Retry reuses the same scan path, without re-capturing the screen.
 - Remote rules are not scanned in v1.
 - The scan uses the same snapshot-backed adapter as the preview; if the two disagree, the preview is authoritative for the user and the discrepancy is a defect.
 
@@ -748,11 +753,13 @@ English source strings; ship as Compose resources with plurals and positional pa
 | Finding elements | Finding elements… |
 | Limits option | Only act right after the app opens |
 | Limits helper | Stops 10 seconds after the app opens, or after one tap. |
+| Limits recommendation | Best for splash screens; later screens will time out. |
 | Disabled notice | This rule won't run until “%1$s” is turned on. |
 | Rule name | Rule name |
 | Save | Save |
 | Saved | Rule saved. |
 | Save error | Couldn't save the rule. Try again. |
+| Scan error | Couldn't check existing rules, so saving is unavailable for now. |
 | Discard title | Discard this rule? |
 | Discard actions | Discard / Keep editing |
 | Raw note | Advanced: this is GKD's rule format. |
