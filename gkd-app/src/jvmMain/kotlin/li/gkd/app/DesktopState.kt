@@ -36,6 +36,7 @@ import li.gkd.app.ui.navigation.CategoryEditorRoute
 import li.gkd.app.ui.navigation.CrashReportRoute
 import li.gkd.app.ui.navigation.EditBlockAppListRoute
 import li.gkd.app.ui.navigation.GkdLink
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.HomeRoute
 import li.gkd.app.ui.navigation.ImagePreviewRoute
 import li.gkd.app.ui.navigation.NotificationTextRoute
@@ -292,6 +293,7 @@ fun routeName(route: AppRoute): String = when (route) {
     is RuleExcludeEditorRoute -> "rule-exclude-editor"
     is WebViewRoute -> "web-view"
     is SnapshotPreviewRoute -> "snapshot-preview"
+    is GuidedAuthoringRoute -> "guided-authoring"
     is ImagePreviewRoute -> "image-preview"
     is AppConfigRoute -> "app-config"
     is ActionLogRoute -> "action-log"
