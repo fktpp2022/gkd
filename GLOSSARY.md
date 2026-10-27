@@ -37,8 +37,8 @@ One bounded run of guided rule creation, from a capture to a saved rule, a raw-e
 _Avoid_: wizard, flow
 
 **Authoring capture**:
-The transient screenshot plus node tree taken for one authoring session. Judged against for picking or demonstration; never added to the snapshot gallery; deleted when the session ends.
-_Avoid_: evidence capture, baseline, demo capture
+The transient, in-memory (never persisted) screenshot plus node tree taken for one authoring session, held by `GuidedCaptureStore`. Judged against for picking or demonstration; never added to the snapshot gallery; deleted when the session ends (save, abandon, reset). Contrast with a **snapshot**: a persisted, id'd `ComplexSnapshot` stored on disk and browsable in the gallery.
+_Avoid_: evidence capture, baseline, demo capture, conflating with a persisted snapshot
 
 **Authoring group**:
 The per-app local group with the reserved localized name where guided rules are saved. Found by name or created on first save.

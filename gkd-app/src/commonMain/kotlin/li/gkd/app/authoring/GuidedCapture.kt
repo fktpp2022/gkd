@@ -19,6 +19,14 @@ fun NodeInfo.isUsableNode(): Boolean =
 
 fun List<NodeInfo>.hasUsableNode(): Boolean = any { it.isUsableNode() }
 
+/**
+ * Holds one [GuidedCapture] at a time, handed across the service→page seam.
+ *
+ * Contract: written once at session start (capture host or stored-snapshot
+ * path), read once by the page ViewModel at construction, cleared on every
+ * session exit (save, abandon, reset). Not a repository: single-session,
+ * in-memory, no persistence.
+ */
 object GuidedCaptureStore {
     val current: StateFlow<GuidedCapture?>
         field = MutableStateFlow(null)

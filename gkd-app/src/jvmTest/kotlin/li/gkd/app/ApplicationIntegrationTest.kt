@@ -155,6 +155,7 @@ class ApplicationIntegrationTest {
                 li.gkd.app.snapshot.SnapshotCaptureRepositoryTest(appStorage()).runAll()
                 li.gkd.app.snapshot.SnapshotStoreTest(appStorage()).runAll()
                 li.gkd.app.authoring.GuidedSnapshotCaptureTest(appStorage()).runAll()
+                li.gkd.app.authoring.GuidedCaptureStoreTest().runAll()
                 li.gkd.app.snapshot.assertSnapshotSharing(appStorage())
                 DesktopAppCatalogTest().profileReloadUsesSharedSelectionAndRecoversFromCorruptFile(
                     profileDir
