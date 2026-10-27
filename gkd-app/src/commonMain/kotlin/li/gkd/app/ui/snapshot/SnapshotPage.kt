@@ -72,7 +72,6 @@ import coil3.request.ImageRequest
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import li.gkd.app.app.ActivityNames.getShowActivityId
-import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.model.date
 import li.gkd.app.network.AppLinks
 import li.gkd.app.resources.*
@@ -141,6 +140,7 @@ fun SnapshotPage(
     }
 
     val actionRequest by vm.actionRequest.collectAsStateWithLifecycle()
+    val ruleReadiness by vm.ruleReadiness.collectAsStateWithLifecycle()
     val actionSnapshot = actionRequest?.let { request -> snapshots.find { it.id == request.key } }
     val thumbnailVersions = remember { mutableStateMapOf<Long, Int>() }
     val selectionState = vm.selection
@@ -452,7 +452,7 @@ fun SnapshotPage(
                             }
                         },
                         onLongClick = { selectionState.select(snapshot.id) },
-                        onMore = { vm.showActions(snapshot.id) },
+                        onMore = { vm.showActions(snapshot) },
                     )
                 }
             }
@@ -494,10 +494,11 @@ fun SnapshotPage(
             imageLoader, snapshot = snapshot,
             appName = appNames[snapshot.appId] ?: snapshot.appId,
             sheetState = sheetState,
+            readiness = ruleReadiness,
             onDismissRequest = dismiss,
-            onCreateRule = { tree ->
+            onCreateRule = {
                 actionScope.launchUi {
-                    if (GuidedSnapshotCapture.open(snapshot, tree)) {
+                    if (vm.openShownRuleAuthoring()) {
                         mainVm.navigator.navigate(GuidedAuthoringRoute())
                     } else {
                         ToastUtils.show(getString(Res.string.guided_dead_end))
