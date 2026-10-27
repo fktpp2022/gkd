@@ -11,6 +11,7 @@ import li.gkd.app.authoring.GuidedCapture
 import li.gkd.app.authoring.GuidedRecordingContext
 import li.gkd.app.authoring.GuidedRecordingGate
 import li.gkd.app.authoring.hasUsableNode
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.platform.service.ServiceController
 import li.gkd.app.service.A11yService
 import li.gkd.app.service.GuidedRuleButtonService
@@ -38,25 +39,28 @@ actual fun UiHost.finishGuidedAuthoring() {
 actual fun guidedRecordingSupported(): Boolean =
     A11yService.isRunning.collectAsStateWithLifecycle().value
 
-actual fun UiHost.startGuidedRecording(context: GuidedRecordingContext): Boolean {
-    if (!GuidedRuleButtonService.startForRecording()) return false
-    GuidedRecordingGate.start(context)
-    moveTaskToBack(true)
-    return true
+actual fun UiHost.startGuidedRecording(context: GuidedRecordingContext): PlatformResult<Unit> {
+    // A missing overlay permission is surfaced by the service's own toast; this result
+    // only distinguishes hosts that cannot record at all.
+    if (GuidedRuleButtonService.startForRecording()) {
+        GuidedRecordingGate.start(context)
+        moveTaskToBack(true)
+    }
+    return PlatformResult.Success(Unit)
 }
 
 actual suspend fun UiHost.captureAndStartGuidedRecording(
     appId: String,
     appName: String?,
-): Boolean {
+): PlatformResult<Boolean> {
     val capture = captureTargetApp(appId)
     if (capture == null) {
         GuidedAuthoringLaunch.returnToAuthoring()
-        return false
+        return PlatformResult.Success(false)
     }
     if (!GuidedRuleButtonService.startForRecording()) {
         GuidedAuthoringLaunch.returnToAuthoring()
-        return false
+        return PlatformResult.Success(false)
     }
     GuidedRecordingGate.start(
         GuidedRecordingContext(
@@ -65,13 +69,13 @@ actual suspend fun UiHost.captureAndStartGuidedRecording(
             activityId = capture.snapshot.activityId,
         )
     )
-    return true
+    return PlatformResult.Success(true)
 }
 
-actual suspend fun UiHost.recaptureGuidedAuthoring(appId: String): Boolean {
+actual suspend fun UiHost.recaptureGuidedAuthoring(appId: String): PlatformResult<Boolean> {
     val captured = captureTargetApp(appId) != null
     GuidedAuthoringLaunch.returnToAuthoring()
-    return captured
+    return PlatformResult.Success(captured)
 }
 
 private suspend fun UiHost.captureTargetApp(appId: String): GuidedCapture? {
