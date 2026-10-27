@@ -69,6 +69,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.min
@@ -195,6 +197,9 @@ fun GuidedAuthoringPage(
     }
     LaunchedEffect(state.overlap) {
         if (state.overlap != null && pending == null) pending = state.overlap?.firstOrNull()
+    }
+    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
+        vm.clearRawHandoffIntent()
     }
     LaunchedEffect(saved) {
         if (saved) {

@@ -73,6 +73,8 @@ import li.gkd.app.state.Loadable
 import li.gkd.app.subscription.RawSubscription
 import li.gkd.app.subscription.SubscriptionRepository
 import li.gkd.app.subscription.SubscriptionJson
+import li.gkd.app.ui.MainViewModel
+import li.gkd.app.ui.navigation.UpsertRuleGroupRoute
 import li.gkd.app.ui.state.BaseViewModel
 import li.gkd.app.ui.subscription.RequiredSubscription
 import li.gkd.db.SubscriptionConfigSnapshot
@@ -202,6 +204,19 @@ data class GuidedRawTarget(
     val global: Boolean,
 )
 
+/** The rule identity captured before the raw editor can write over the guided draft. */
+private data class RawHandoffIntent(
+    val appId: String,
+    val groupKey: Int?,
+    val global: Boolean,
+    val ruleKey: Int?,
+    val groupBefore: RawSubscription.RawAppGroup?,
+    val globalGroupBefore: RawSubscription.RawGlobalGroup?,
+    val groupKeysBefore: Set<Int>,
+    val draftBefore: GuidedRuleDraft,
+    val nameEditedBefore: Boolean,
+)
+
 class GuidedAuthoringViewModel(
     private val startManualAppId: String? = null,
 ) : BaseViewModel() {
@@ -211,6 +226,7 @@ class GuidedAuthoringViewModel(
     private var usable = false
 
     private var ruleScope: GuidedRuleScope? = null
+    private var rawHandoffIntent: RawHandoffIntent? = null
     private var authoringGroupName: String = ""
     private var baseline: GuidedRuleDraft = GuidedRuleDraft()
     private var preEditDraft: GuidedRuleDraft? = null
@@ -481,6 +497,7 @@ class GuidedAuthoringViewModel(
                     notice = GuidedSaveNotices.resolve(scope, authoringGroupName),
                 )
             }
+            reconcileRawHandoff(local)
             if (scan is Loadable.Ready) {
                 val pick = state.value.pick
                 if (pick != null && !state.value.manual && state.value.editing == null) {
@@ -737,18 +754,120 @@ class GuidedAuthoringViewModel(
     fun requestRawHandoff(preferred: GuidedRuleCandidate? = null) {
         val appId = state.value.appId ?: return
         val local = ruleScope?.local
-        val authoringGroup = local?.apps?.find { it.id == appId }
-            ?.groups?.find { it.name == authoringGroupName }
+        val appGroups = local?.apps?.find { it.id == appId }?.groups.orEmpty()
+        val authoringGroup = appGroups.find { it.name == authoringGroupName }
         val target = when (preferred) {
             is GuidedRuleCandidate.App -> GuidedRawTarget(preferred.groupKey, global = false)
             is GuidedRuleCandidate.Global -> GuidedRawTarget(preferred.groupKey, global = true)
             null -> GuidedRawTarget(authoringGroup?.key, global = false)
         }
+        val groupBefore = when (preferred) {
+            is GuidedRuleCandidate.App -> preferred.group
+            is GuidedRuleCandidate.Global -> null
+            null -> authoringGroup
+        }
+        rawHandoffIntent = RawHandoffIntent(
+            appId = appId,
+            groupKey = target.groupKey,
+            global = target.global,
+            ruleKey = preferred?.ruleKey,
+            groupBefore = groupBefore,
+            globalGroupBefore = (preferred as? GuidedRuleCandidate.Global)?.group,
+            groupKeysBefore = appGroups.mapTo(mutableSetOf()) { it.key },
+            draftBefore = state.value.draft,
+            nameEditedBefore = state.value.nameEdited,
+        )
         rawHandoff.value = target
     }
 
     fun consumeRawHandoff() {
         rawHandoff.value = null
+    }
+
+    /** Leaving the raw editor without a save must not turn a later store write into a handoff. */
+    fun clearRawHandoffIntent() {
+        rawHandoffIntent = null
+    }
+
+    /**
+     * The raw editor is the only writer. Once its save reaches the store, either reopen the
+     * guided draft on the saved rule or end the session where the raw editor remains on top.
+     */
+    private fun reconcileRawHandoff(local: RawSubscription) {
+        val intent = rawHandoffIntent ?: return
+        if (intent.global) {
+            val group = local.globalGroups.find { it.key == intent.groupKey } ?: return
+            if (group == intent.globalGroupBefore) return
+            endRawHandoff()
+            return
+        }
+        val appGroups = local.apps.find { it.id == intent.appId }?.groups.orEmpty()
+        val group = if (intent.groupKey != null) {
+            appGroups.find { it.key == intent.groupKey }
+        } else {
+            appGroups.find { it.name == authoringGroupName }
+        }
+        if (group == null) {
+            val before = intent.groupBefore
+            val changed = if (before == null) {
+                appGroups.any { it.key !in intent.groupKeysBefore }
+            } else {
+                appGroups.none { it == before }
+            }
+            if (changed) endRawHandoff()
+            return
+        }
+        if (group == intent.groupBefore) return
+        val rule = when {
+            intent.ruleKey != null -> group.rules.find { it.key == intent.ruleKey }
+            else -> {
+                val beforeRules = intent.groupBefore?.rules.orEmpty()
+                group.rules.firstOrNull { candidate -> beforeRules.none { it == candidate } }
+            }
+        }
+        val data = rule?.let { GuidedRuleReader.read(it) }
+        if (group.name != authoringGroupName || data !is GuidedRuleReadResult.Success) {
+            endRawHandoff()
+            return
+        }
+        applyRawHandoff(intent, group, rule, data.data)
+    }
+
+    private fun applyRawHandoff(
+        intent: RawHandoffIntent,
+        group: RawSubscription.RawAppGroup,
+        rule: RawSubscription.RawAppRule,
+        data: GuidedRuleData,
+    ) {
+        rawHandoffIntent = null
+        val draft = data.toDraft()
+        baseline = draft
+        preEditDraft = intent.draftBefore
+        preEditNameEdited = intent.nameEditedBefore
+        state.update {
+            it.resetSession(
+                phase = GuidedAuthoringPhase.Editing,
+                draft = draft,
+                pick = it.pick,
+                manual = it.manual,
+            ).copy(
+                editing = GuidedRuleCandidate.App(
+                    group = group,
+                    rule = rule,
+                    inAuthoringGroup = group.name == authoringGroupName,
+                ),
+                nameEdited = data.name != null,
+                saving = false,
+            )
+        }
+        refreshPreview()
+        val navigator = MainViewModel.requireCurrent().navigator
+        if (navigator.topRoute is UpsertRuleGroupRoute) navigator.pop()
+    }
+
+    private fun endRawHandoff() {
+        rawHandoffIntent = null
+        closeSession()
     }
 
     fun startManual() {
@@ -768,6 +887,7 @@ class GuidedAuthoringViewModel(
     fun requestSave() {
         val current = state.value
         if (!current.canSave || persistJob?.isActive == true) return
+        rawHandoffIntent = null
         val scan = current.scan
         if (scan !is Loadable.Ready) return
         state.update { it.copy(saving = true, saveError = false) }
@@ -1034,6 +1154,7 @@ class GuidedAuthoringViewModel(
     }
 
     fun closeSession() {
+        rawHandoffIntent = null
         previewJob?.cancel()
         broadJob?.cancel()
         detectionJob?.cancel()

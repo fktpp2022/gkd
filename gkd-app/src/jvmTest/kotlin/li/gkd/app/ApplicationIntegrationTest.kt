@@ -167,6 +167,7 @@ class ApplicationIntegrationTest {
                 li.gkd.app.backup.assertBackupSnapshotConsistency()
                 assertBackupRoundTrip(appStorage())
                 assertGuidedSaveOutcomes()
+                li.gkd.app.ui.authoring.GuidedRawHandoffTest(runtime.simulator).runAll()
                 assertUnsupportedRecordingKeepsSession()
             }
             assertFailsWith<IllegalStateException> { li.gkd.app.network.isNetworkRequestAllowed() }

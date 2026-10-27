@@ -106,12 +106,15 @@ class UpsertRuleGroupViewModel(
     private val saveSession = EditorSaveSession<String?>()
 
     private var addedAppId: String? = null
+    private var wrote = false
 
     suspend fun saveRule(text: String) {
         addedAppId = saveSession.save { performSave(text) }
     }
 
     fun onSaved() {
+        // A guided save is returned by the authoring session only when it is still representable.
+        if (route.guided && wrote) return
         val mainVm = MainViewModel.requireCurrent()
         if (route.forward) {
             mainVm.navigator.navigate(
@@ -152,7 +155,7 @@ class UpsertRuleGroupViewModel(
                     val originalGroup = requireNotNull(
                         baseGroup,
                     ) as RawSubscription.RawAppGroup
-                    requiredSubscription.update { subscription ->
+                    val changed = requiredSubscription.update { subscription ->
                         subscription.edit {
                             replaceAppGroup(
                                 targetApp = subscription.getApp(
@@ -165,6 +168,7 @@ class UpsertRuleGroupViewModel(
                             )
                         }
                     }
+                    wrote = wrote || changed
                 } else {
                     val newGroup = input.parseGlobalGroup().copy(key = groupKey)
                     if (newGroup == initialGroup) {
@@ -174,23 +178,25 @@ class UpsertRuleGroupViewModel(
                     val originalGroup = requireNotNull(
                         baseGroup,
                     ) as RawSubscription.RawGlobalGroup
-                    requiredSubscription.update { subscription ->
+                    val changed = requiredSubscription.update { subscription ->
                         subscription.edit {
                             replaceGlobalGroup(groupKey, originalGroup, newGroup)
                         }
                     }
+                    wrote = wrote || changed
                 }
             } else {
                 if (isAddAnyApp) {
                     val newApp = input.parseApp()
-                    requiredSubscription.update { subscription ->
+                    val changed = requiredSubscription.update { subscription ->
                         subscription.edit { mergeApp(newApp) }
                     }
+                    wrote = wrote || changed
                     addedAppId = newApp.id
                 } else if (appId != null) {
                     // add specified app group
                     val newGroups = input.parseAppGroups(appId)
-                    requiredSubscription.update { subscription ->
+                    val changed = requiredSubscription.update { subscription ->
                         subscription.edit {
                             appendAppGroups(
                                 targetApp = subscription.getApp(
@@ -201,12 +207,14 @@ class UpsertRuleGroupViewModel(
                             )
                         }
                     }
+                    wrote = wrote || changed
                 } else {
                     // add global group
                     val newGroup = input.parseGlobalGroup()
-                    requiredSubscription.update { subscription ->
+                    val changed = requiredSubscription.update { subscription ->
                         subscription.edit { appendGlobalGroup(newGroup) }
                     }
+                    wrote = wrote || changed
                 }
             }
             if (isEdit) {
