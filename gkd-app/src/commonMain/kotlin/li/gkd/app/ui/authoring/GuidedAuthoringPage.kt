@@ -328,6 +328,7 @@ fun GuidedAuthoringPage(
                     },
                 )
 
+                GuidedAuthoringPhase.Indexing,
                 GuidedAuthoringPhase.Picking -> {
                     val snapshot = vm.snapshot
                     if (snapshot == null) {
@@ -354,6 +355,7 @@ fun GuidedAuthoringPage(
                             snapshot = snapshot,
                             screenshot = vm.screenshot,
                             sourceLabel = snapshotSource,
+                            indexing = !state.canPick,
                             pending = pending,
                             pickLabel = pending?.let(vm::resolvePick),
                             failure = state.recordingFailure,
@@ -627,6 +629,7 @@ private fun GuidedPickingContent(
     snapshot: ComplexSnapshot,
     screenshot: ByteArray?,
     sourceLabel: String?,
+    indexing: Boolean,
     pending: NodeInfo?,
     pickLabel: li.gkd.app.authoring.GuidedPick?,
     failure: GuidedRecordingFailure?,
@@ -639,10 +642,17 @@ private fun GuidedPickingContent(
     onCaptureAndRecord: () -> Unit,
     onCancelRecording: () -> Unit,
 ) {
+    val pickAt = if (indexing || failure != null) null else onCandidates
     Column(modifier = Modifier.fillMaxSize()) {
         if (failure == null) {
             Text(
-                text = stringResource(Res.string.guided_pick_hint),
+                text = stringResource(
+                    if (indexing) {
+                        Res.string.guided_finding_elements
+                    } else {
+                        Res.string.guided_pick_hint
+                    },
+                ),
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 style = MaterialTheme.typography.bodyLarge,
             )
@@ -670,7 +680,7 @@ private fun GuidedPickingContent(
             actableId = pickLabel?.actable?.id,
             selectedId = pending?.id,
             description = stringResource(Res.string.guided_canvas_pick_description),
-            onCandidates = { if (failure == null) onCandidates(it) },
+            onCandidates = pickAt,
             modifier = Modifier.fillMaxWidth().weight(1f).padding(horizontal = 12.dp),
         )
         if (screenshot == null) {
@@ -681,7 +691,7 @@ private fun GuidedPickingContent(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
-        if (failure == null) {
+        if (failure == null && !indexing) {
             if (pending != null) {
                 GuidedSelectedSummary(node = pending, pick = pickLabel)
             }

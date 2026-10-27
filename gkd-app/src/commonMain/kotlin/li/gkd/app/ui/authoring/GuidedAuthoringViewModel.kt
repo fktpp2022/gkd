@@ -79,7 +79,7 @@ import li.gkd.db.SubscriptionConfigStore
 import li.gkd.db.SubscriptionIds
 import org.jetbrains.compose.resources.getString
 
-enum class GuidedAuthoringPhase { Picking, Editing, DeadEnd }
+enum class GuidedAuthoringPhase { Indexing, Picking, Editing, DeadEnd }
 
 enum class GuidedRecordingFailure { NoTap, NoNode, ScreenChanged }
 
@@ -116,6 +116,21 @@ data class GuidedAuthoringState(
 ) {
     fun canRetryCapture(liveCapture: Boolean): Boolean =
         phase == GuidedAuthoringPhase.DeadEnd && appId != null && liveCapture && !manual
+
+    val canPick: Boolean get() = phase == GuidedAuthoringPhase.Picking
+
+    fun afterIndexing(usable: Boolean): GuidedAuthoringState =
+        if (phase != GuidedAuthoringPhase.Indexing) {
+            this
+        } else {
+            copy(
+                phase = if (usable) {
+                    GuidedAuthoringPhase.Picking
+                } else {
+                    GuidedAuthoringPhase.DeadEnd
+                },
+            )
+        }
 
     fun afterRetryCapture(usable: Boolean): GuidedAuthoringState =
         if (usable) {
@@ -190,10 +205,9 @@ class GuidedAuthoringViewModel(
     private val startManualAppId: String? = null,
 ) : BaseViewModel() {
     private var capture: GuidedCapture? = GuidedCaptureStore.current.value
-    private var adapter: SnapshotNodeAdapter? =
-        capture?.snapshot?.nodes?.takeIf { it.isNotEmpty() }?.let(::SnapshotNodeAdapter)
-    private var nodes: List<NodeInfo> = capture?.snapshot?.nodes.orEmpty()
-    private var usable = nodes.hasUsableNode()
+    private var adapter: SnapshotNodeAdapter? = null
+    private var nodes: List<NodeInfo> = emptyList()
+    private var usable = false
 
     private var ruleScope: GuidedRuleScope? = null
     private var authoringGroupName: String = ""
@@ -211,8 +225,8 @@ class GuidedAuthoringViewModel(
 
     private val initialPhase = when {
         startManualAppId != null -> GuidedAuthoringPhase.Editing
-        capture == null || !usable -> GuidedAuthoringPhase.DeadEnd
-        else -> GuidedAuthoringPhase.Picking
+        capture == null -> GuidedAuthoringPhase.DeadEnd
+        else -> GuidedAuthoringPhase.Indexing
     }
 
     private val initialState = GuidedAuthoringState(
@@ -252,10 +266,13 @@ class GuidedAuthoringViewModel(
     val screenshot: ByteArray? get() = capture?.screenshot
     val snapshot: li.gkd.app.model.ComplexSnapshot? get() = capture?.snapshot
 
-    fun resolvePick(node: NodeInfo): GuidedPick? =
-        adapter?.let { GuidedPickResolver.resolve(node, it) }
+    fun resolvePick(node: NodeInfo): GuidedPick? {
+        if (!state.value.canPick) return null
+        return adapter?.let { GuidedPickResolver.resolve(node, it) }
+    }
 
     init {
+        if (initialPhase == GuidedAuthoringPhase.Indexing) capture?.let(::indexCapture)
         viewModelScope.launch {
             authoringGroupName = getString(Res.string.guided_authoring_group_name)
             loadRuleScope()
@@ -270,6 +287,33 @@ class GuidedAuthoringViewModel(
             }
         }
     }
+
+    /**
+     * A1: the frozen capture is already on screen while the node adapter is built off the main
+     * thread; completion routes to A2 for a usable tree and A9 otherwise.
+     */
+    private fun indexCapture(capture: GuidedCapture) {
+        viewModelScope.launch {
+            val indexed = withContext(Dispatchers.Default) {
+                val nodes = capture.snapshot.nodes
+                IndexedCapture(
+                    adapter = nodes.takeIf { it.isNotEmpty() }?.let(::SnapshotNodeAdapter),
+                    nodes = nodes,
+                    usable = nodes.hasUsableNode(),
+                )
+            }
+            adapter = indexed.adapter
+            nodes = indexed.nodes
+            usable = indexed.usable
+            state.update { it.afterIndexing(usable = indexed.usable) }
+        }
+    }
+
+    private data class IndexedCapture(
+        val adapter: SnapshotNodeAdapter?,
+        val nodes: List<NodeInfo>,
+        val usable: Boolean,
+    )
 
     fun recordingContext(): GuidedRecordingContext? {
         val capture = capture ?: return null
@@ -441,6 +485,7 @@ class GuidedAuthoringViewModel(
     )
 
     fun select(node: NodeInfo) {
+        if (!state.value.canPick) return
         val action = pendingRecordedAction
         pendingRecordedAction = null
         selectNode(node, action ?: GuidedRuleAction.Click, recorded = action != null)
