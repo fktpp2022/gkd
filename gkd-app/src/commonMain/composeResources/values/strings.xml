@@ -1114,6 +1114,7 @@
     <string name="guided_choose_again">重新选择</string>
     <string name="guided_choose_from_list">从列表中选择</string>
     <string name="guided_node_list_title">选择元素</string>
+    <string name="guided_node_list_empty">此屏幕上没有可列出的元素。你可以手动描述目标元素。</string>
     <string name="guided_node_unnamed">元素</string>
     <string name="guided_node_meta">%1$s · %2$s×%3$s</string>
     <string name="guided_overlap_title">你想选择哪个元素？</string>

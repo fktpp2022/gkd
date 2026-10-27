@@ -81,6 +81,7 @@ import li.gkd.app.authoring.GuidedContextRelation
 import li.gkd.app.authoring.GuidedDuplicateResult
 import li.gkd.app.authoring.GuidedExistingRuleHit
 import li.gkd.app.authoring.GuidedNodeLabel
+import li.gkd.app.authoring.GuidedNodeListContent
 import li.gkd.app.authoring.GuidedPreviewResult
 import li.gkd.app.authoring.GuidedRuleAction
 import li.gkd.app.authoring.GuidedRuleCandidate
@@ -88,7 +89,9 @@ import li.gkd.app.authoring.GuidedRuleReadResult
 import li.gkd.app.authoring.GuidedRuleReader
 import li.gkd.app.authoring.GuidedSaveNotice
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.guidedNodeListContent
 import li.gkd.app.authoring.isUsableNode
+import li.gkd.app.authoring.preselectedOverlap
 import li.gkd.app.authoring.property
 import li.gkd.app.model.ComplexSnapshot
 import li.gkd.app.model.NodeInfo
@@ -359,7 +362,7 @@ fun GuidedAuthoringPage(
                             failure = state.recordingFailure,
                             onCandidates = { candidates ->
                                 if (candidates.size > 1) {
-                                    pending = candidates.first()
+                                    pending = preselectedOverlap(candidates)
                                     vm.showOverlap(candidates)
                                 } else {
                                     pending = candidates.firstOrNull()
@@ -450,6 +453,10 @@ fun GuidedAuthoringPage(
                 onSelect = { node ->
                     pending = node
                     showNodeList = false
+                },
+                onDescribeManually = {
+                    showNodeList = false
+                    vm.startManual()
                 },
             )
         }
@@ -1579,10 +1586,9 @@ private fun GuidedNodeListSheet(
     snapshot: ComplexSnapshot,
     onDismiss: () -> Unit,
     onSelect: (NodeInfo) -> Unit,
+    onDescribeManually: () -> Unit,
 ) {
-    val nodes = remember(snapshot) {
-        snapshot.nodes.filter { it.isUsableNode() && GuidedNodeLabel.of(it) != null }
-    }
+    val content = remember(snapshot) { guidedNodeListContent(snapshot.nodes) }
     GkModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
@@ -1592,33 +1598,54 @@ private fun GuidedNodeListSheet(
             modifier = Modifier.padding(horizontal = 24.dp, vertical = 12.dp),
             style = MaterialTheme.typography.titleMedium,
         )
-        LazyColumn(modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp)) {
-            items(nodes, key = { it.id }) { node ->
-                Row(
+        when (content) {
+            is GuidedNodeListContent.Nodes -> LazyColumn(
+                modifier = Modifier.fillMaxWidth().heightIn(max = 420.dp),
+            ) {
+                items(content.nodes, key = { it.id }) { node ->
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable { onSelect(node) }
+                            .padding(
+                                start = (16 + node.attr.depth.coerceIn(0, 6) * 12).dp,
+                                end = 16.dp,
+                                top = 12.dp,
+                                bottom = 12.dp,
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = guidedNodeLabel(node),
+                            style = MaterialTheme.typography.bodyLarge,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f),
+                        )
+                        Spacer(Modifier.width(12.dp))
+                        Text(
+                            text = guidedNodeMeta(node),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+
+            GuidedNodeListContent.Manual -> Column(Modifier.fillMaxWidth()) {
+                Text(
+                    text = stringResource(Res.string.guided_node_list_empty),
+                    modifier = Modifier.padding(horizontal = 24.dp),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Button(
+                    onClick = onDescribeManually,
                     modifier = Modifier
                         .fillMaxWidth()
-                        .clickable { onSelect(node) }
-                        .padding(
-                            start = (16 + node.attr.depth.coerceIn(0, 6) * 12).dp,
-                            end = 16.dp,
-                            top = 12.dp,
-                            bottom = 12.dp,
-                        ),
-                    verticalAlignment = Alignment.CenterVertically,
+                        .padding(horizontal = 24.dp, vertical = 12.dp),
                 ) {
-                    Text(
-                        text = guidedNodeLabel(node),
-                        style = MaterialTheme.typography.bodyLarge,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f),
-                    )
-                    Spacer(Modifier.width(12.dp))
-                    Text(
-                        text = guidedNodeMeta(node),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    Text(stringResource(Res.string.guided_describe_manually))
                 }
             }
         }
