@@ -263,6 +263,8 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - Options (collapsed): the limits option, the rule name (auto-suggested, editable), and Advanced → the read-only canonical selector.
 - Overflow: **Edit as JSON** (A11). Not part of the basic path.
 - Save:
+  - Save stays disabled until the existing-rule scan completes, and stays disabled if the scan fails. The conditions screen and A14 show the same gate.
+  - Scan failure → an inline banner (not a modal, not a toast) with the failure copy and **Retry**, in place of the existing-rule banner. A failure is never rendered as an empty rule list. Retry re-runs the scan without re-capturing; once it completes, Save behaves exactly like the completed-scan path, including the zero-candidate path.
   - 0 matches → A8 inline, primary button becomes "Save anyway".
   - 1 match → duplicate check (A7 if needed) → save.
   - N > 1 → A4 broad sheet before saving.
@@ -629,7 +631,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 - Off means: no timing fields. The engine's default `actionCd` (1000 ms) is the only throttle; a persistent target can be acted on roughly once per second until it disappears.
 - A rule saved mid-session with the option on may not fire until the app is opened again; this is expected and is consistent with the copy. There is no "try it now" in v1.
 - Copy: "Only act right after the app opens", helper "Stops 10 seconds after the app opens, or after one tap." The option is offered, never applied silently.
-- Recommendation in the UI is explicit: splash screens may benefit; later screens will time out.
+- Recommendation in the UI is explicit and shown with the option: "Best for splash screens; later screens will time out." The helper stays as additional information.
 
 ### 9.6 Fields the guided flow never writes
 
@@ -651,6 +653,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
 - `preKeys` rules are tested on primary selectors only; the banner is advisory, not proof that the trigger happened.
 - Ordering: authoring group → other local app groups → local global groups. The banner names the first; "+N more" lists the rest.
 - Re-runs on a new pick; a dismissal applies to that pick only.
+- If the scan fails, the existing-rule banner is replaced by an inline failure banner with **Retry**. Save stays disabled until a retry completes; a failure is never shown as "no existing rules". Retry reuses the same scan path, without re-capturing the screen.
 - Remote rules are not scanned in v1.
 - The scan uses the same snapshot-backed adapter as the preview; if the two disagree, the preview is authoritative for the user and the discrepancy is a defect.
 
@@ -748,11 +751,13 @@ English source strings; ship as Compose resources with plurals and positional pa
 | Finding elements | Finding elements… |
 | Limits option | Only act right after the app opens |
 | Limits helper | Stops 10 seconds after the app opens, or after one tap. |
+| Limits recommendation | Best for splash screens; later screens will time out. |
 | Disabled notice | This rule won't run until “%1$s” is turned on. |
 | Rule name | Rule name |
 | Save | Save |
 | Saved | Rule saved. |
 | Save error | Couldn't save the rule. Try again. |
+| Scan error | Couldn't check existing rules, so saving is unavailable for now. |
 | Discard title | Discard this rule? |
 | Discard actions | Discard / Keep editing |
 | Raw note | Advanced: this is GKD's rule format. |
