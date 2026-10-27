@@ -240,13 +240,13 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - Summary: "Selected: “<label>”" and the resolved action target when it differs ("Acting on the button around this text").
 - Actions: **Use this**, **Choose again**.
 - If the picked node is not clickable and has no usable text/description, the actable node is the nearest clickable ancestor; this is stated, not hidden.
-- Accessibility alternative: **Choose from a list** lists labeled nodes in screen order with their indent; selecting one behaves like a pick. If the list is empty, route to A14.
+- Accessibility alternative: **Choose from a list** lists labeled nodes in screen order with their indent; selecting one behaves like a pick. When the capture has no labeled node, the sheet lists nothing and offers **Describe manually** as its primary action instead; that opens A14 for the session's app, with the captured tree available for label typeahead only and no preview or context.
 - In a live-capture session, A2 also offers **Record**: a single top-bar icon (a record dot), accessible name "Record a tap". It appears only after the picker has usable nodes, is absent from A9 and from A3 onward, and starts A15 immediately with no confirmation sheet. It is hidden for the rest of the authoring session after a demonstration succeeds and returns after a failed attempt. Picking remains the primary path.
 - More than one candidate at the point: A2b.
 
 ### 6.5 A2b — Which element?
 
-- Candidates are the smallest meaningful nodes at the point, sorted smallest-first; the smallest clickable node with text is preselected.
+- Candidates are the smallest meaningful nodes at the point, sorted smallest-first; the smallest clickable node with text is preselected. When no candidate has text, the smallest candidate is preselected.
 - Each row: label (text → desc → type), type, size. Selecting a row draws its bounds behind the sheet.
 - Actions: Use this, Cancel.
 
@@ -351,8 +351,10 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 ### 6.17 A14 — Manual condition editor
 
 - Same rows and options as A3, without a screenshot or a pick.
+- Entered from A9 **Describe manually**, or from A2's **Choose from a list** sheet when the capture has no labeled node; both keep the session's app id.
 - Add condition works as usual; Next to/Inside require a captured tree, so the context action is unavailable here.
-- If a captured or stored tree is available, the typeahead uses its labels; otherwise it is empty. There is no preview when the session has no screenshot.
+- There is never a preview here, even when the session holds a screenshot: the preview card shows its unavailable state.
+- If a captured or stored tree is available, the typeahead uses its labels; otherwise it is empty. That tree feeds typeahead only and is not otherwise surfaced.
 - Save performs the duplicate check; the existing-rule banner is unavailable without a tree.
 - Saved rules are identical in shape to picked rules.
 
