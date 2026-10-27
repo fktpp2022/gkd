@@ -19,11 +19,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SheetState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -37,8 +33,6 @@ import coil3.compose.LocalPlatformContext
 import coil3.request.CachePolicy
 import coil3.request.ImageRequest
 import li.gkd.app.app.ActivityNames.getShowActivityId
-import li.gkd.app.authoring.GuidedSnapshotCapture
-import li.gkd.app.model.ComplexSnapshot
 import li.gkd.app.network.AppLinks
 import li.gkd.app.resources.*
 import li.gkd.app.time.format
@@ -57,8 +51,9 @@ fun GkSnapshotActionsSheet(
     snapshot: Snapshot,
     appName: String,
     sheetState: SheetState,
+    readiness: SnapshotRuleReadiness,
     onDismissRequest: () -> Unit,
-    onCreateRule: (ComplexSnapshot) -> Unit,
+    onCreateRule: () -> Unit,
     onShare: () -> Unit,
     shareEnabled: Boolean,
     onSaveToDownloads: () -> Unit,
@@ -70,14 +65,6 @@ fun GkSnapshotActionsSheet(
     fun perform(action: () -> Unit) {
         onDismissRequest()
         action()
-    }
-    var createRuleUsable by remember(snapshot.id) {
-        mutableStateOf(snapshot.appId.isNotBlank())
-    }
-    var createRuleTree by remember(snapshot.id) { mutableStateOf<ComplexSnapshot?>(null) }
-    LaunchedEffect(snapshot.id) {
-        createRuleTree = GuidedSnapshotCapture.load(snapshot)
-        createRuleUsable = createRuleTree != null
     }
     GkModalBottomSheet(
         onDismissRequest = onDismissRequest,
@@ -99,11 +86,13 @@ fun GkSnapshotActionsSheet(
             SnapshotActionRow(
                 icon = GkIcons.Rule,
                 title = stringResource(Res.string.guided_create_rule),
-                subtitle = if (createRuleUsable) null else stringResource(Res.string.guided_dead_end),
-                enabled = createRuleUsable,
-                onClick = {
-                    createRuleTree?.let { tree -> perform { onCreateRule(tree) } }
+                subtitle = if (readiness is SnapshotRuleReadiness.Unavailable) {
+                    stringResource(Res.string.guided_dead_end)
+                } else {
+                    null
                 },
+                enabled = readiness.canCreateRule,
+                onClick = { perform(onCreateRule) },
             )
             HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             SnapshotActionRow(
