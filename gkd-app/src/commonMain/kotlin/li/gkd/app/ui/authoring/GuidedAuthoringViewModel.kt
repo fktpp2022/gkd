@@ -140,6 +140,11 @@ data class GuidedAuthoringState(
             this
         }
 
+    val scanFailed: Boolean get() = scan is Loadable.Failure
+
+    fun afterRetryScan(): GuidedAuthoringState =
+        if (scan is Loadable.Failure) copy(scan = Loadable.Loading) else this
+
     val canSave: Boolean
         get() {
             if (saving || draft.target.isEmpty() || appId == null) return false
@@ -885,6 +890,12 @@ class GuidedAuthoringViewModel(
     fun retrySave() {
         state.update { it.copy(saveError = false) }
         requestSave()
+    }
+
+    fun retryScan() {
+        if (!state.value.scanFailed) return
+        state.update { it.afterRetryScan() }
+        captureRevision.value++
     }
 
     private fun persist(replaceRuleKey: Int?) {

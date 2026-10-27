@@ -433,6 +433,7 @@ fun GuidedAuthoringPage(
                             onStartContext = vm::startContext,
                             onRemoveContext = vm::removeContext,
                             onRetry = vm::retrySave,
+                            onRetryScan = vm::retryScan,
                         )
                     }
                 }
@@ -918,6 +919,7 @@ private fun GuidedEditingContent(
     onStartContext: () -> Unit,
     onRemoveContext: () -> Unit,
     onRetry: () -> Unit,
+    onRetryScan: () -> Unit,
 ) {
     Column(
         modifier = Modifier.fillMaxSize().verticalScroll(rememberScrollState()),
@@ -960,6 +962,10 @@ private fun GuidedEditingContent(
                 onRaw = { onRaw(state.existingHits.first().candidate) },
                 onDismiss = onDismissExisting,
             )
+        }
+
+        if (state.scanFailed) {
+            GuidedScanErrorBanner(onRetryScan)
         }
 
         if (state.saveError) {
@@ -1036,6 +1042,12 @@ private fun GuidedEditingContent(
                 subtitle = stringResource(Res.string.guided_limits_helper),
                 checked = state.draft.limitToAppOpening,
                 onCheckedChange = onLimit,
+            )
+            Text(
+                text = stringResource(Res.string.guided_limits_recommendation),
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
                 GkOutlinedTextField(
@@ -1357,6 +1369,31 @@ private fun GuidedNoticeBanner(notice: GuidedSaveNotice.Disabled) {
             modifier = Modifier.padding(12.dp),
             style = MaterialTheme.typography.bodyMedium,
         )
+    }
+}
+
+@Composable
+private fun GuidedScanErrorBanner(onRetry: () -> Unit) {
+    Card(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 4.dp),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.errorContainer,
+            contentColor = MaterialTheme.colorScheme.onErrorContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(start = 12.dp, end = 4.dp, top = 4.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = stringResource(Res.string.guided_scan_error),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            TextButton(onClick = onRetry) {
+                Text(stringResource(Res.string.guided_retry))
+            }
+        }
     }
 }
 
