@@ -25,7 +25,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import li.gkd.app.app.ActivityNames.getShowActivityId
-import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.resources.*
 import li.gkd.app.state.Loadable
 import li.gkd.app.ui.MainViewModel
@@ -58,6 +57,7 @@ fun SnapshotPreviewPage(
     val replaceRoute: (AppRoute) -> Unit = { mainVm.navigator.navigate(it, true) }
     val vm = viewModel { SnapshotViewModel() }
     val shareProgress by vm.shareProgress.collectAsStateWithLifecycle()
+    val ruleReadiness by vm.ruleReadiness.collectAsStateWithLifecycle()
     val guidedDeadEnd = stringResource(Res.string.guided_dead_end)
 
     val loadableState by vm.uiState.collectAsStateWithLifecycle()
@@ -119,7 +119,7 @@ fun SnapshotPreviewPage(
                                 imageVector = GkIcons.MoreVert,
                                 contentDescription = stringResource(Res.string.more_label),
                                 colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                                onClick = { vm.showActions(item.id) },
+                                onClick = { vm.showActions(item) },
                             )
                         }
                     },
@@ -172,10 +172,11 @@ fun SnapshotPreviewPage(
                         imageLoader, snapshot = snapshot,
                         appName = catalog.snapshot?.apps?.get(snapshot.appId)?.name ?: snapshot.appId,
                         sheetState = sheetState,
+                        readiness = ruleReadiness,
                         onDismissRequest = dismiss,
-                        onCreateRule = { tree ->
+                        onCreateRule = {
                             vm.scope.launchUi {
-                                if (GuidedSnapshotCapture.open(snapshot, tree)) {
+                                if (vm.openShownRuleAuthoring()) {
                                     mainVm.navigator.navigate(GuidedAuthoringRoute())
                                 } else {
                                     ToastUtils.show(guidedDeadEnd)
