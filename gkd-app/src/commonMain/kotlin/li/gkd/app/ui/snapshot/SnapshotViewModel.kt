@@ -62,7 +62,6 @@ class SnapshotViewModel : BaseViewModel() {
     suspend fun openShownRuleAuthoring(): Boolean {
         val snapshot = shownSnapshot ?: return false
         val tree = (ruleReadiness.value as? SnapshotRuleReadiness.Available)?.tree ?: return false
-        if (tree.id != snapshot.id) return false
         return GuidedSnapshotCapture.open(snapshot, tree)
     }
 

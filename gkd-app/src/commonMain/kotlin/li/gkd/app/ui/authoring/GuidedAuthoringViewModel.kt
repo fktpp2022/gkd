@@ -789,11 +789,6 @@ class GuidedAuthoringViewModel(
         rawHandoff.value = null
     }
 
-    /** Leaving the raw editor without a save must not turn a later store write into a handoff. */
-    fun clearRawHandoffIntent() {
-        rawHandoffIntent = null
-    }
-
     /**
      * The raw editor is the only writer. Once its save reaches the store, either reopen the
      * guided draft on the saved rule or end the session where the raw editor remains on top.
