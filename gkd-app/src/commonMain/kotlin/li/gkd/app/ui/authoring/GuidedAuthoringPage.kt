@@ -69,8 +69,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import kotlin.math.min
@@ -172,9 +170,10 @@ fun GuidedAuthoringPage(
         val appId = state.appId
         if (appId != null) {
             pending = null
-            vm.prepareRecording()
             scope.launch {
-                vm.adoptRecapturedCapture(host.captureAndStartGuidedRecording(appId, state.appName))
+                val result = host.captureAndStartGuidedRecording(appId, state.appName)
+                if (result is PlatformResult.Success) vm.prepareRecording()
+                vm.adoptRecapturedCapture(result)
             }
         }
     }
@@ -199,10 +198,9 @@ fun GuidedAuthoringPage(
         }
     }
     LaunchedEffect(state.overlap) {
-        if (state.overlap != null && pending == null) pending = state.overlap?.firstOrNull()
-    }
-    LifecycleEventEffect(Lifecycle.Event.ON_RESUME) {
-        vm.clearRawHandoffIntent()
+        if (state.overlap != null && pending == null) {
+            pending = preselectedOverlap(state.overlap.orEmpty())
+        }
     }
     LaunchedEffect(saved) {
         if (saved) {

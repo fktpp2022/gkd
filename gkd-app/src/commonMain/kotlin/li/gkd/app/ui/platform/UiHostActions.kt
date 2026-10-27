@@ -11,6 +11,8 @@ expect fun UiHost.finishGuidedAuthoring()
 
 @Composable
 expect fun guidedRecordingSupported(): Boolean
+
+/** `Success(Unit)` means the host supports recording and accepted the request, not that a gate is running. */
 expect fun UiHost.startGuidedRecording(context: GuidedRecordingContext): PlatformResult<Unit>
 expect suspend fun UiHost.captureAndStartGuidedRecording(
     appId: String,

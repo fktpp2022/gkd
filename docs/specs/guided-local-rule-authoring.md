@@ -336,7 +336,7 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - When the draft has no group yet, it opens the new-group editor preloaded with the draft rule text in the authoring group; nothing is written until the raw editor saves.
 - One-line note: "Advanced: this is GKD's rule format."
 - Leaving without saving returns to the guided draft.
-- Saving returns to the guided view only if the rule is still representable; otherwise the session ends at the raw editor.
+- Saving returns to the guided view only if the rule is still representable: the saved rule reads back as a guided rule in the session's authoring group. An unreadable rule, a global rule, or a rule moved to another group ends the session at the raw editor.
 
 ### 6.15 A12 — Save result and abandon
 
