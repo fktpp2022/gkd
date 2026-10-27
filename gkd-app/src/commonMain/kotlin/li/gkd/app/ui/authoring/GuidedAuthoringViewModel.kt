@@ -63,6 +63,7 @@ import li.gkd.app.authoring.GuidedTextOperator
 import li.gkd.app.authoring.broadPlan
 import li.gkd.app.authoring.hasUsableNode
 import li.gkd.app.authoring.scanGuidedRules
+import li.gkd.app.authoring.suggestedName
 import li.gkd.app.authoring.toSelectorDraft
 import li.gkd.app.model.NodeInfo
 import li.gkd.app.resources.*
@@ -111,6 +112,7 @@ data class GuidedAuthoringState(
     val overlap: List<NodeInfo>? = null,
     val recordingFailure: GuidedRecordingFailure? = null,
     val recordSpent: Boolean = false,
+    val suggestedName: String = "",
 ) {
     fun canRetryCapture(liveCapture: Boolean): Boolean =
         phase == GuidedAuthoringPhase.DeadEnd && appId != null && liveCapture && !manual
@@ -139,6 +141,33 @@ data class GuidedAuthoringState(
             }
         }
 }
+
+fun GuidedAuthoringState.resetSession(
+    phase: GuidedAuthoringPhase,
+    draft: GuidedRuleDraft = GuidedRuleDraft(),
+    pick: GuidedPick? = null,
+    manual: Boolean = false,
+    dynamicText: Boolean = false,
+    recorded: Boolean = false,
+): GuidedAuthoringState = copy(
+    phase = phase,
+    draft = draft,
+    pick = pick,
+    preview = GuidedPreviewState.NoPreview,
+    existingHits = emptyList(),
+    existingDismissed = true,
+    editing = null,
+    contextError = false,
+    dynamicText = dynamicText,
+    nameEdited = false,
+    manual = manual,
+    saveError = false,
+    contextMode = null,
+    overlap = null,
+    recordingFailure = null,
+    recordSpent = recordSpent || recorded,
+    suggestedName = draft.action.suggestedName(pick?.actable?.let(GuidedNodeLabel::of)),
+)
 
 enum class GuidedDuplicateKind { Replaceable, AuthoringAdvanced, Foreign }
 
@@ -191,6 +220,7 @@ class GuidedAuthoringViewModel(
         appId = startManualAppId ?: capture?.snapshot?.appId,
         appName = capture?.snapshot?.appInfo?.name ?: capture?.snapshot?.appId,
         manual = startManualAppId != null,
+        suggestedName = GuidedRuleAction.Click.suggestedName(label = null),
     )
 
     val state: StateFlow<GuidedAuthoringState>
@@ -430,23 +460,12 @@ class GuidedAuthoringViewModel(
         baseline = draft
         preEditDraft = null
         state.update {
-            it.copy(
+            it.resetSession(
                 phase = GuidedAuthoringPhase.Editing,
                 draft = draft,
                 pick = pick,
-                preview = GuidedPreviewState.NoPreview,
-                existingHits = emptyList(),
-                existingDismissed = true,
-                editing = null,
-                contextError = false,
                 dynamicText = dynamicText,
-                nameEdited = false,
-                manual = false,
-                saveError = false,
-                contextMode = null,
-                overlap = null,
-                recordingFailure = null,
-                recordSpent = it.recordSpent || recorded,
+                recorded = recorded,
             )
         }
         refreshPreview()
@@ -495,7 +514,12 @@ class GuidedAuthoringViewModel(
         }
     }
 
-    fun setAction(action: GuidedRuleAction) = updateDraft { it.copy(action = action) }
+    fun setAction(action: GuidedRuleAction) {
+        updateDraft { it.copy(action = action) }
+        state.update {
+            it.copy(suggestedName = action.suggestedName(it.pick?.actable?.let(GuidedNodeLabel::of)))
+        }
+    }
 
     fun setLimitToAppOpening(enabled: Boolean) =
         updateDraft { it.copy(limitToAppOpening = enabled) }
@@ -617,6 +641,9 @@ class GuidedAuthoringViewModel(
                 saveError = false,
                 contextMode = null,
                 overlap = null,
+                suggestedName = draft.action.suggestedName(
+                    it.pick?.actable?.let(GuidedNodeLabel::of),
+                ),
             )
         }
         refreshPreview()
@@ -641,6 +668,9 @@ class GuidedAuthoringViewModel(
                 editing = null,
                 existingDismissed = true,
                 saveError = false,
+                suggestedName = draft.action.suggestedName(
+                    it.pick?.actable?.let(GuidedNodeLabel::of),
+                ),
             )
         }
         refreshPreview()
@@ -664,27 +694,15 @@ class GuidedAuthoringViewModel(
     }
 
     fun startManual() {
-        val appId = state.value.appId ?: return
+        if (state.value.appId == null) return
         val draft = GuidedRuleDraft()
         baseline = draft
         preEditDraft = null
         state.update {
-            it.copy(
+            it.resetSession(
                 phase = GuidedAuthoringPhase.Editing,
-                appId = appId,
                 draft = draft,
-                pick = null,
-                preview = GuidedPreviewState.NoPreview,
-                existingHits = emptyList(),
-                existingDismissed = true,
-                editing = null,
-                contextError = false,
-                dynamicText = false,
-                nameEdited = false,
                 manual = true,
-                saveError = false,
-                contextMode = null,
-                overlap = null,
             )
         }
     }
@@ -823,14 +841,13 @@ class GuidedAuthoringViewModel(
         }
         val draft = current.draft
         val editingKey = current.editing?.ruleKey
-        val label = current.pick?.actable?.let(GuidedNodeLabel::of)
         state.update { it.copy(saving = true, saveError = false) }
         val required = RequiredSubscription(SubscriptionIds.LOCAL, viewModelScope)
         persistJob = viewModelScope.launch {
             val ruleName = if (current.nameEdited) {
                 draft.nameOverride?.takeIf { it.isNotBlank() }
             } else {
-                autoRuleName(draft.action, label)
+                current.suggestedName
             }
             val request = GuidedRuleWriteRequest(
                 appId = appId,
@@ -861,22 +878,6 @@ class GuidedAuthoringViewModel(
                 saved.value = true
             } else {
                 state.update { it.copy(saving = false, saveError = true) }
-            }
-        }
-    }
-
-    private suspend fun autoRuleName(action: GuidedRuleAction, label: String?): String {
-        return when (action) {
-            GuidedRuleAction.Click -> if (label != null) {
-                getString(Res.string.guided_rule_name_tap, label)
-            } else {
-                getString(Res.string.guided_rule_name_tap_fallback)
-            }
-
-            GuidedRuleAction.LongPress -> if (label != null) {
-                getString(Res.string.guided_rule_name_long_press, label)
-            } else {
-                getString(Res.string.guided_rule_name_long_press_fallback)
             }
         }
     }
@@ -961,25 +962,7 @@ class GuidedAuthoringViewModel(
         recordingWaitJob?.cancel()
         pendingRecordedAction = null
         screenChangedWhileResolving = false
-        state.update {
-            it.copy(
-                phase = GuidedAuthoringPhase.Picking,
-                draft = GuidedRuleDraft(),
-                pick = null,
-                preview = GuidedPreviewState.NoPreview,
-                existingHits = emptyList(),
-                existingDismissed = true,
-                editing = null,
-                contextError = false,
-                dynamicText = false,
-                nameEdited = false,
-                manual = false,
-                saveError = false,
-                contextMode = null,
-                overlap = null,
-                recordingFailure = null,
-            )
-        }
+        state.update { it.resetSession(phase = GuidedAuthoringPhase.Picking) }
         baseline = GuidedRuleDraft()
     }
 

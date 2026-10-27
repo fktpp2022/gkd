@@ -187,6 +187,7 @@ fun GuidedAuthoringPage(
     val close: () -> Unit = {
         if (route.fromOverlay) host.finishGuidedAuthoring() else mainVm.navigator.pop()
     }
+    val editAsJson: (GuidedRuleCandidate?) -> Unit = vm::requestRawHandoff
 
     LaunchedEffect(state.phase) {
         if (state.phase != GuidedAuthoringPhase.Picking) {
@@ -276,7 +277,7 @@ fun GuidedAuthoringPage(
                 },
                 actions = {
                     if (state.phase == GuidedAuthoringPhase.Editing) {
-                        GuidedOverflowAction(onEditJson = { vm.requestRawHandoff() })
+                        GuidedOverflowAction(onEditJson = { editAsJson(null) })
                     }
                     if (canRecord) {
                         GkIconButton(
@@ -408,7 +409,7 @@ fun GuidedAuthoringPage(
                             onToggleExistingMore = { showExistingMore = !showExistingMore },
                             onEditExisting = vm::editExisting,
                             onDismissExisting = vm::dismissExisting,
-                            onRaw = vm::requestRawHandoff,
+                            onRaw = editAsJson,
                             onPreview = { showPreview = true },
                             onAction = vm::setAction,
                             onLimit = vm::setLimitToAppOpening,
@@ -1034,14 +1035,7 @@ private fun GuidedEditingContent(
                     onValueChange = onName,
                     modifier = Modifier.fillMaxWidth(),
                     label = { Text(stringResource(Res.string.guided_rule_name)) },
-                    placeholder = {
-                        Text(
-                            guidedAutoRuleName(
-                                state.draft.action,
-                                state.pick?.actable?.let(::displayLabel),
-                            ),
-                        )
-                    },
+                    placeholder = { Text(state.suggestedName) },
                     singleLine = true,
                 )
             }
@@ -2211,19 +2205,3 @@ private fun guidedNodeMeta(node: NodeInfo): String {
         node.attr.height.toString(),
     )
 }
-
-@Composable
-private fun guidedAutoRuleName(action: GuidedRuleAction, label: String?): String =
-    when (action) {
-        GuidedRuleAction.Click -> if (label != null) {
-            stringResource(Res.string.guided_rule_name_tap, label)
-        } else {
-            stringResource(Res.string.guided_rule_name_tap_fallback)
-        }
-
-        GuidedRuleAction.LongPress -> if (label != null) {
-            stringResource(Res.string.guided_rule_name_long_press, label)
-        } else {
-            stringResource(Res.string.guided_rule_name_long_press_fallback)
-        }
-    }

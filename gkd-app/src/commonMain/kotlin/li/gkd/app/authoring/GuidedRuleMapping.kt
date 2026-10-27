@@ -1,5 +1,6 @@
 package li.gkd.app.authoring
 
+import li.gkd.app.resources.*
 import li.gkd.app.subscription.RawSubscription
 import li.gkd.db.SubscriptionIds
 
@@ -10,6 +11,23 @@ enum class GuidedRuleAction(val key: String) {
 
     companion object {
         fun fromKey(key: String?): GuidedRuleAction? = entries.find { it.key == key }
+    }
+}
+
+fun GuidedRuleAction.suggestedName(label: String?): String {
+    val text = label?.replace(Regex("\\s+"), " ")?.trim()?.takeIf { it.isNotEmpty() }
+    return when (this) {
+        GuidedRuleAction.Click -> if (text != null) {
+            Res.string.guided_rule_name_tap.getSync(text)
+        } else {
+            Res.string.guided_rule_name_tap_fallback.getSync()
+        }
+
+        GuidedRuleAction.LongPress -> if (text != null) {
+            Res.string.guided_rule_name_long_press.getSync(text)
+        } else {
+            Res.string.guided_rule_name_long_press_fallback.getSync()
+        }
     }
 }
 
