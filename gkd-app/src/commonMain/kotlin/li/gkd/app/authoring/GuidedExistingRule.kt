@@ -84,9 +84,8 @@ object GuidedExistingRuleDetector {
         if (candidates.isEmpty() || nodes.isEmpty()) return emptyList()
         val related = relatedNodeIds(picked, adapter)
         return candidates.mapNotNull { candidate ->
-            val parameters = runCatching {
-                RuleExecutionParameters(candidate.rule, candidate.group)
-            }.getOrNull() ?: return@mapNotNull null
+            if (!candidate.group.valid) return@mapNotNull null
+            val parameters = RuleExecutionParameters(candidate.rule, candidate.group)
             val target = matchRule(parameters, nodes, adapter) ?: return@mapNotNull null
             if (target.id !in related) return@mapNotNull null
             GuidedExistingRuleHit(candidate, target)
