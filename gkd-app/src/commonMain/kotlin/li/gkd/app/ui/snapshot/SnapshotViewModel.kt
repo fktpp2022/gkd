@@ -9,7 +9,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.platform.PlatformResult
 import li.gkd.app.resources.*
 import li.gkd.app.snapshot.SnapshotStore
@@ -33,12 +35,35 @@ class SnapshotViewModel : BaseViewModel() {
     val actionRequest: StateFlow<SheetRequest<Long>?>
         field = MutableStateFlow(null)
 
-    fun showActions(snapshotId: Long) {
-        actionRequest.value = SheetRequest(snapshotId)
+    val ruleReadiness: StateFlow<SnapshotRuleReadiness>
+        field = MutableStateFlow<SnapshotRuleReadiness>(SnapshotRuleReadiness.Loading)
+
+    private var readinessJob: Job? = null
+    private var shownSnapshot: Snapshot? = null
+
+    fun showActions(snapshot: Snapshot) {
+        shownSnapshot = snapshot
+        actionRequest.value = SheetRequest(snapshot.id)
+        readinessJob?.cancel()
+        ruleReadiness.value = SnapshotRuleReadiness.Loading
+        readinessJob = scope.launch {
+            val tree = SnapshotStore.loadSnapshot(snapshot.id)
+            if (actionRequest.value?.key == snapshot.id) {
+                ruleReadiness.value = snapshotRuleReadiness(snapshot.appId, tree)
+            }
+        }
     }
 
     fun dismissActions(request: SheetRequest<Long>) {
         actionRequest.compareAndSet(request, null)
+    }
+
+    /** Opens a guided session for the shown snapshot from the tree asynchronously loaded for it. */
+    suspend fun openShownRuleAuthoring(): Boolean {
+        val snapshot = shownSnapshot ?: return false
+        val tree = (ruleReadiness.value as? SnapshotRuleReadiness.Available)?.tree ?: return false
+        if (tree.id != snapshot.id) return false
+        return GuidedSnapshotCapture.open(snapshot, tree)
     }
 
     val selection = MultiSelectionState<Long>()
