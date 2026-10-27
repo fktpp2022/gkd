@@ -2,6 +2,7 @@ package li.gkd.app.authoring
 
 import kotlin.test.Test
 import kotlin.test.assertEquals
+import kotlin.test.assertFalse
 import kotlin.test.assertIs
 import kotlin.test.assertTrue
 import li.gkd.app.model.AppInfo
@@ -160,6 +161,55 @@ class GuidedExistingRuleTest {
             detect(testAppRule(matches = listOf("[text="))),
         )
     }
+
+    @Test
+    fun detectsOnlyTheValidRuleWhenAnotherStoredRuleIsInvalid() {
+        val invalidGroup = testAppGroup(
+            key = 9,
+            rules = listOf(testAppRule(key = 9, matches = listOf("[text="))),
+        )
+        val validGroup = testAppGroup(
+            key = 3,
+            rules = listOf(testAppRule(key = 3, name = "Confirm", matches = listOf("[text=\"OK\"]"))),
+        )
+        assertFalse(invalidGroup.valid)
+
+        val hits = GuidedExistingRuleDetector.detect(
+            candidates = listOf(candidate(invalidGroup), candidate(validGroup)),
+            picked = picked,
+            nodes = nodes,
+            adapter = adapter,
+        )
+
+        assertEquals(listOf(3), hits.map { it.candidate.ruleKey })
+        assertEquals(listOf(4), hits.map { it.target.id })
+    }
+
+    @Test
+    fun detectsTheValidRuleWhenNoStoredRuleIsInvalid() {
+        val group = testAppGroup(
+            key = 3,
+            rules = listOf(testAppRule(key = 3, name = "Confirm", matches = listOf("[text=\"OK\"]"))),
+        )
+        assertTrue(group.valid)
+
+        val hits = GuidedExistingRuleDetector.detect(
+            candidates = listOf(candidate(group)),
+            picked = picked,
+            nodes = nodes,
+            adapter = adapter,
+        )
+
+        assertEquals(listOf(3), hits.map { it.candidate.ruleKey })
+        assertEquals(listOf(4), hits.map { it.target.id })
+    }
+
+    private fun candidate(group: RawSubscription.RawAppGroup): GuidedRuleCandidate =
+        GuidedRuleCandidate.App(
+            group = group,
+            rule = group.rules.single(),
+            inAuthoringGroup = true,
+        )
 
     @Test
     fun preservesCandidateOrder() {
