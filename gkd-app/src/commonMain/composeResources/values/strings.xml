@@ -1105,6 +1105,7 @@
 
     <string name="guided_authoring_group_name">我的规则</string>
     <string name="guided_create_rule">创建规则</string>
+    <string name="guided_finding_elements">正在查找元素…</string>
     <string name="guided_pick_hint">点按 GKD 应操作的元素。</string>
     <string name="guided_selected">已选择：“%1$s”</string>
     <string name="guided_current_pick">当前选中</string>
