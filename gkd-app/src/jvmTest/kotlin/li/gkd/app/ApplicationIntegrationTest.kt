@@ -13,6 +13,7 @@ import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
@@ -26,13 +27,19 @@ import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
+import li.gkd.app.authoring.GuidedCapture
+import li.gkd.app.authoring.GuidedCaptureStore
 import li.gkd.app.authoring.GuidedCondition
 import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.testNode
 import li.gkd.app.backup.BackupManager
 import li.gkd.app.crash.assertCrashReports
 import li.gkd.app.model.AppInfo
 import li.gkd.app.model.AppInventory
+import li.gkd.app.model.ComplexSnapshot
+import li.gkd.app.model.DeviceInfo
 import li.gkd.app.network.inspection.assertInspectionProtocol
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.resources.*
 import li.gkd.app.settings.SettingsRepository
 import li.gkd.app.settings.SettingsRepositoryChecks
@@ -44,6 +51,7 @@ import li.gkd.app.subscription.RawSubscription
 import li.gkd.app.subscription.SubscriptionJson
 import li.gkd.app.subscription.SubscriptionRepository
 import li.gkd.app.ui.MainViewModel
+import li.gkd.app.ui.authoring.GuidedAuthoringPhase
 import li.gkd.app.ui.authoring.GuidedAuthoringViewModel
 import li.gkd.app.ui.component.ToastState
 import li.gkd.app.ui.home.BottomNavItem
@@ -159,6 +167,7 @@ class ApplicationIntegrationTest {
                 li.gkd.app.backup.assertBackupSnapshotConsistency()
                 assertBackupRoundTrip(appStorage())
                 assertGuidedSaveOutcomes()
+                assertUnsupportedRecordingKeepsSession()
             }
             assertFailsWith<IllegalStateException> { li.gkd.app.network.isNetworkRequestAllowed() }
             assertFailsWith<IllegalStateException> { li.gkd.app.app.openAppCatalog() }
@@ -624,6 +633,51 @@ class ApplicationIntegrationTest {
             SubscriptionRepository.update(id) { previous }
         }
     }
+
+    // A host that cannot capture for authoring must not advance or fail the authoring session.
+    private suspend fun assertUnsupportedRecordingKeepsSession() =
+        withContext(Dispatchers.Main.immediate) {
+            val previous = GuidedCaptureStore.current.value
+            GuidedCaptureStore.put(
+                GuidedCapture(
+                    snapshot = ComplexSnapshot(
+                        id = 24,
+                        appId = "test.alpha",
+                        activityId = null,
+                        screenHeight = 100,
+                        screenWidth = 100,
+                        isLandscape = false,
+                        appInfo = null,
+                        gkdAppInfo = null,
+                        device = DeviceInfo("test", "test", "test", "test", 0, "test"),
+                        nodes = listOf(testNode(1, 0, text = "OK", clickable = true)),
+                    ),
+                    screenshot = null,
+                    capturedAt = 24,
+                )
+            )
+            val owner = ViewModelStore()
+            val vm = GuidedAuthoringViewModel().also { owner.put("guided-unsupported", it) }
+            try {
+                withTimeout(5_000) { vm.state.first { it.appName != null } }
+                // Android's failed capture path still ends the session on the retry dead end.
+                vm.prepareRecording()
+                vm.adoptRecapturedCapture(PlatformResult.Success(false))
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+
+                vm.adoptRetryCapture(PlatformResult.Unsupported)
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+
+                vm.adoptRecapturedCapture(PlatformResult.Unsupported)
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+            } finally {
+                owner.clear()
+                previous?.let(GuidedCaptureStore::put) ?: GuidedCaptureStore.clear()
+            }
+        }
 
     private suspend fun assertBackupRoundTrip(layout: AppStorageLayout) {
         val repository = SubscriptionRepository

@@ -92,6 +92,7 @@ import li.gkd.app.authoring.isUsableNode
 import li.gkd.app.authoring.property
 import li.gkd.app.model.ComplexSnapshot
 import li.gkd.app.model.NodeInfo
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.resources.*
 import li.gkd.app.ui.MainViewModel
 import li.gkd.app.ui.component.GkAlertDialog
@@ -157,8 +158,9 @@ fun GuidedAuthoringPage(
         val context = vm.recordingContext()
         if (context != null) {
             pending = null
-            vm.prepareRecording()
-            host.startGuidedRecording(context)
+            if (host.startGuidedRecording(context) is PlatformResult.Success) {
+                vm.prepareRecording()
+            }
         }
     }
     val captureAndRecord: () -> Unit = {
@@ -167,11 +169,7 @@ fun GuidedAuthoringPage(
             pending = null
             vm.prepareRecording()
             scope.launch {
-                if (host.captureAndStartGuidedRecording(appId, state.appName)) {
-                    vm.adoptRecapturedCapture()
-                } else {
-                    vm.recaptureFailed()
-                }
+                vm.adoptRecapturedCapture(host.captureAndStartGuidedRecording(appId, state.appName))
             }
         }
     }

@@ -66,6 +66,7 @@ import li.gkd.app.authoring.scanGuidedRules
 import li.gkd.app.authoring.suggestedName
 import li.gkd.app.authoring.toSelectorDraft
 import li.gkd.app.model.NodeInfo
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.resources.*
 import li.gkd.app.snapshot.SnapshotNodeAdapter
 import li.gkd.app.state.Loadable
@@ -293,7 +294,15 @@ class GuidedAuthoringViewModel(
         state.update { it.copy(recordingFailure = null) }
     }
 
-    fun adoptRecapturedCapture() {
+    fun adoptRecapturedCapture(result: PlatformResult<Boolean>) {
+        val captured = when (result) {
+            is PlatformResult.Success -> result.value
+            PlatformResult.Unsupported -> return
+        }
+        if (!captured) {
+            recaptureFailed()
+            return
+        }
         val capture = GuidedCaptureStore.current.value ?: return
         val adapter = capture.snapshot.nodes
             .takeIf { it.isNotEmpty() }
@@ -317,8 +326,12 @@ class GuidedAuthoringViewModel(
         }
     }
 
-    fun adoptRetryCapture(captured: Boolean) {
+    fun adoptRetryCapture(result: PlatformResult<Boolean>) {
         if (!canRetryCapture) return
+        val captured = when (result) {
+            is PlatformResult.Success -> result.value
+            PlatformResult.Unsupported -> return
+        }
         val capture = if (captured) GuidedCaptureStore.current.value else null
         val nodes = capture?.snapshot?.nodes?.takeIf { it.hasUsableNode() }
         if (capture != null && nodes != null) {
