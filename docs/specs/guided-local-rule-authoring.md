@@ -130,6 +130,7 @@ No Quick Settings tile, notification action, share target, launcher shortcut, or
 - Tap hides all GKD overlays, captures the foreground app's active window, and opens the authoring page. One tap, no confirmation.
 - If capture fails, the page stays in GKD with a plain-language retry/dead-end state (A9); it never pretends to have a screen.
 - If the overlay permission is revoked while the button is on, the button disappears and the setting shows the permission action; the app-page and snapshot entries remain usable.
+- Hidden while GKD's own UI is foreground — the authoring page included — and returns when the target app is foreground. It draws nothing there, so it cannot cover or intercept GKD's own screens; the recording chip is a separate surface (section 5.4).
 
 ### 4.3 GKD app page entry
 
@@ -363,7 +364,7 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - The engine is idle for the whole phase, everywhere; it resumes the moment recording ends. This is the separator from GKD's own clicks, and the only one on Android 8–11.
 - There is no timer and no target highlight. The live screen is never marked, outlined, or highlighted. Starting recording takes no new screenshot; the authoring capture remains the only reference.
 - The first click or long-click event **from the captured app** ends the phase, usable or not. Events from other apps are ignored and do not consume the attempt; leaving the captured app leaves the phase live. A pre-tap window change in the captured app ends it with A17.
-- Back and Home remain ordinary app/launcher actions; they do not end the phase. Stop is always one tap away while the chip is visible.
+- Back and Home remain ordinary app/launcher actions; they do not end the phase. Stop is offered while the phase is still accepting the demonstrated tap; once a tap is being resolved the chip drops Stop for the resolving window, and the phase ends when resolution finishes.
 - On start, TalkBack announces: "Recording. Tap the element in %1$s. GKD rules are paused." The chip is one focusable group with a Stop action.
 - When the phase ends, the authoring page comes forward automatically over the frozen capture; there is no notification and no manual return step.
 
@@ -478,7 +479,7 @@ A6 and A8 are inline states on A3, not separate pages. A15–A17 are the recordi
 - Build each selector from structured parts with the shared selector-string escaper; never interpolate user text into syntax by hand.
 - Compile with `Selector.compile`; canonicalize with `toString()`; persist only the canonical string.
 - Identifier comparisons precede flag filters so the selector remains fast-query eligible; `fastQuery` is never auto-enabled.
-- One alternative → `matches: "<selector>"` (a single string, as the parser accepts both a string and an array).
+- One alternative → `matches: ["<selector>"]` (a one-element array, the canonical persisted form; the parser also accepts a bare string).
 - Two or more alternatives → `anyMatches: ["…", "…"]`; never both `matches` and `anyMatches`. The v1 UI cannot create more than one alternative, but the mapping is fixed now.
 - A generated selector that fails to compile is a defect: keep the draft, show A13, and offer raw; do not save a partial selector.
 
@@ -565,7 +566,7 @@ Recording v1 uses the accessibility click-event path only:
 | `groups[].rules[].name` | Auto-suggested as `Tap “<label>”` / `Long-press “<label>”` (fallback `Tap element`), localized at creation, user-editable; omitted when empty |
 | `groups[].rules[].key` | Existing rule key on replace; otherwise `max(existing keys)+1`, starting at 1 |
 | `groups[].rules[].action` | `"click"` or `"longClick"` |
-| `groups[].rules[].matches` | Canonical selector string (one alternative) |
+| `groups[].rules[].matches` | Canonical selector string in a one-element array (one alternative); the parser also accepts a bare string |
 | `groups[].rules[].matchTime` | `10000` only when the limits option is on |
 | `groups[].rules[].actionMaximum` | `1` only when the limits option is on |
 | `groups[].rules[].resetMatch` | `"app"` only when the limits option is on |
@@ -595,7 +596,7 @@ Recording v1 uses the accessibility click-event path only:
               name: "Tap “跳过 5s”",
               key: 1,
               action: "click",
-              matches: "[text=\"跳过 5s\"]",
+              matches: ["[text=\"跳过 5s\"]"],
             },
           ],
         },
@@ -605,7 +606,7 @@ Recording v1 uses the accessibility click-event path only:
 }
 ```
 
-Quoting is delegated to the existing JSON5 encoder; the example shows equivalent JSON5 and English placeholder names (the real subscription/group names are localized). The canonical selector is `[text="跳过 5s"]`.
+Quoting is delegated to the existing JSON5 encoder; the example shows equivalent JSON5 and English placeholder names (the real subscription/group names are localized). The canonical selector is `[text="跳过 5s"]`, persisted as the one-element `matches` array shown; the parser treats a bare string the same.
 
 ### 9.4 Example — limits on
 
@@ -614,7 +615,7 @@ Quoting is delegated to the existing JSON5 encoder; the example shows equivalent
   name: "Tap “跳过 5s”",
   key: 2,
   action: "click",
-  matches: "[text=\"跳过 5s\"]",
+  matches: ["[text=\"跳过 5s\"]"],
   matchTime: 10000,
   actionMaximum: 1,
   resetMatch: "app",
@@ -840,6 +841,8 @@ Deferred past recording v1: multi-action/multi-rule sessions; actions other than
 ---
 
 ## 16. Device-test checklist
+
+**PR QA note:** sections 4.2, 6.18, and 8.4/9.2–9.4 record the behaviour verified for this PR — floating-button hiding over GKD's own UI, Stop during resolution, and the one-element `matches` form; re-check only the screens those sections cover.
 
 **Setup and permissions**
 
