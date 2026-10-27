@@ -56,6 +56,7 @@ import li.gkd.app.ui.component.rememberRuleControlEnvironment
 import li.gkd.app.ui.component.rememberRuleListFocus
 import li.gkd.app.ui.navigation.ActionLogRoute
 import li.gkd.app.ui.navigation.AppConfigRoute
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.SubsAppGroupListRoute
 import li.gkd.app.ui.navigation.SubsGlobalGroupListRoute
 import li.gkd.app.ui.navigation.UpsertRuleGroupRoute
@@ -329,6 +330,21 @@ fun AppConfigPage(
                                 }
                             }
                         }
+                        GkIconButton(
+                            imageVector = GkIcons.Rule,
+                            contentDescription = stringResource(Res.string.guided_create_rule),
+                            onClick = {
+                                scope.launchUi {
+                                    if (vm.openLatestSnapshotAuthoring()) {
+                                        mainVm.navigator.navigate(GuidedAuthoringRoute())
+                                    } else {
+                                        mainVm.navigator.navigate(
+                                            GuidedAuthoringRoute(startManualAppId = appId)
+                                        )
+                                    }
+                                }
+                            },
+                        )
                         GkIconButton(
                             imageVector = GkIcons.History,
                             onClick = {

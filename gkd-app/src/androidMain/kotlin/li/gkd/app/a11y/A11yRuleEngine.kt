@@ -14,6 +14,8 @@ import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withTimeoutOrNull
 import li.gkd.app.META
+import li.gkd.app.authoring.GuidedRecordingGate
+import li.gkd.app.authoring.GuidedRecordingSession
 import li.gkd.app.data.ActionPerformer
 import li.gkd.app.platform.lifecycle.MainActivityVisibility
 import li.gkd.app.priv.privilegeContextFlow
@@ -165,6 +167,7 @@ class A11yRuleEngine(private val service: A11yCommonImpl) {
                 }
             }
         }
+        if (GuidedRecordingSession.isPaused) return
         val activityRule = activityRuleFlow.value
         if (evAppId != rightAppId || activityRule.skipConsumeEvent || !SettingsRepository.settings.value.enableMatch) {
             return
@@ -216,6 +219,7 @@ class A11yRuleEngine(private val service: A11yCommonImpl) {
         byDelayRule: ResolvedRule? = null,
     ) {
         if (!effective) return
+        if (GuidedRecordingSession.isPaused) return
         if (!SettingsRepository.settings.value.enableMatch) return
         if (activityRuleFlow.value.currentRules.isEmpty()) return
         if (querying) return
@@ -310,6 +314,7 @@ class A11yRuleEngine(private val service: A11yCommonImpl) {
                 }
             }
         }
+        if (GuidedRecordingSession.isPaused) return
         val activityRule = A11yState.currentRule
         activityRule.currentRules.forEach { rule ->
             if (rule.status == RuleStatus.MatchDelay) {
@@ -349,6 +354,7 @@ class A11yRuleEngine(private val service: A11yCommonImpl) {
         }
         for (rule in activityRule.priorityRules) { // 规则数量有可能过多导致耗时过长
             if (!effective) return
+            if (GuidedRecordingSession.isPaused) return
             if (checkOutDate(activityRule, tempStateEvent)) break
             if (delayRule != null && delayRule !== rule) continue
             if (rule.status != RuleStatus.Ready) continue
@@ -395,7 +401,9 @@ class A11yRuleEngine(private val service: A11yCommonImpl) {
                 rule.rule.action
                 ?: rule.rule.position?.let { ActionPerformer.ClickCenter.action }
                 ?: rule.rule.swipeArg?.let { ActionPerformer.Swipe.action })
-            val actionResult = performer.perform(target, rule.rule)
+            val actionResult = GuidedRecordingGate.performAction {
+                performer.perform(target, rule.rule)
+            } ?: return
             if (actionResult.result) {
                 val topActivity = currentTopActivity
                 rule.trigger()

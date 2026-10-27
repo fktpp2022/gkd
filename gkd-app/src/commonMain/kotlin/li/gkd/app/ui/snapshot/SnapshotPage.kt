@@ -92,6 +92,7 @@ import li.gkd.app.ui.component.GkPageBottomSpace
 import li.gkd.app.ui.component.GkRetainedSheet
 import li.gkd.app.ui.component.GkScaffold
 import li.gkd.app.ui.image.appImageLoader
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.SnapshotPreviewRoute
 import li.gkd.app.snapshot.SnapshotDisplayMode
 import li.gkd.app.model.findOption
@@ -139,6 +140,7 @@ fun SnapshotPage(
     }
 
     val actionRequest by vm.actionRequest.collectAsStateWithLifecycle()
+    val ruleReadiness by vm.ruleReadiness.collectAsStateWithLifecycle()
     val actionSnapshot = actionRequest?.let { request -> snapshots.find { it.id == request.key } }
     val thumbnailVersions = remember { mutableStateMapOf<Long, Int>() }
     val selectionState = vm.selection
@@ -450,7 +452,7 @@ fun SnapshotPage(
                             }
                         },
                         onLongClick = { selectionState.select(snapshot.id) },
-                        onMore = { vm.showActions(snapshot.id) },
+                        onMore = { vm.showActions(snapshot) },
                     )
                 }
             }
@@ -492,7 +494,17 @@ fun SnapshotPage(
             imageLoader, snapshot = snapshot,
             appName = appNames[snapshot.appId] ?: snapshot.appId,
             sheetState = sheetState,
+            readiness = ruleReadiness,
             onDismissRequest = dismiss,
+            onCreateRule = {
+                actionScope.launchUi {
+                    if (vm.openShownRuleAuthoring()) {
+                        mainVm.navigator.navigate(GuidedAuthoringRoute())
+                    } else {
+                        ToastUtils.show(getString(Res.string.guided_dead_end))
+                    }
+                }
+            },
             onShare = { vm.shareSnapshots(listOf(snapshot), host.snapshotPlatformActions()) },
             shareEnabled = shareProgress == null,
             onSaveToDownloads = { actions.saveToDownloads(snapshot) },

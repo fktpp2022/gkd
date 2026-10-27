@@ -51,7 +51,9 @@ fun GkSnapshotActionsSheet(
     snapshot: Snapshot,
     appName: String,
     sheetState: SheetState,
+    readiness: SnapshotRuleReadiness,
     onDismissRequest: () -> Unit,
+    onCreateRule: () -> Unit,
     onShare: () -> Unit,
     shareEnabled: Boolean,
     onSaveToDownloads: () -> Unit,
@@ -81,6 +83,18 @@ fun GkSnapshotActionsSheet(
                 appName,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
+            SnapshotActionRow(
+                icon = GkIcons.Rule,
+                title = stringResource(Res.string.guided_create_rule),
+                subtitle = if (readiness is SnapshotRuleReadiness.Unavailable) {
+                    stringResource(Res.string.guided_dead_end)
+                } else {
+                    null
+                },
+                enabled = readiness.canCreateRule,
+                onClick = { perform(onCreateRule) },
+            )
+            HorizontalDivider(modifier = Modifier.padding(vertical = 4.dp))
             SnapshotActionRow(
                 icon = if (snapshot.githubAssetId == null) GkIcons.Link else GkIcons.ContentCopy,
                 title = if (snapshot.githubAssetId == null) {

@@ -1,0 +1,1186 @@
+package li.gkd.app.ui.authoring
+
+import androidx.lifecycle.viewModelScope
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import li.gkd.app.app.AppInfoRepository
+import li.gkd.app.app.launcherAppIdFlow
+import li.gkd.app.authoring.GuidedCapture
+import li.gkd.app.authoring.GuidedCaptureStore
+import li.gkd.app.authoring.GuidedCondition
+import li.gkd.app.authoring.GuidedConditionProperty
+import li.gkd.app.authoring.GuidedContext
+import li.gkd.app.authoring.GuidedContextBuildFailure
+import li.gkd.app.authoring.GuidedContextBuildResult
+import li.gkd.app.authoring.GuidedContextBuilder
+import li.gkd.app.authoring.GuidedContextMode
+import li.gkd.app.authoring.GuidedDuplicateCheck
+import li.gkd.app.authoring.GuidedDuplicateResult
+import li.gkd.app.authoring.GuidedExistingRuleDetector
+import li.gkd.app.authoring.GuidedExistingRuleHit
+import li.gkd.app.authoring.GuidedNodeLabel
+import li.gkd.app.authoring.GuidedPick
+import li.gkd.app.authoring.GuidedPickResolver
+import li.gkd.app.authoring.GuidedPrefillBuilder
+import li.gkd.app.authoring.GuidedPrefillResult
+import li.gkd.app.authoring.GuidedPreviewBuilder
+import li.gkd.app.authoring.GuidedPreviewResult
+import li.gkd.app.authoring.GuidedRecordingContext
+import li.gkd.app.authoring.GuidedRecordingPhase
+import li.gkd.app.authoring.GuidedRecordingResolution
+import li.gkd.app.authoring.GuidedRecordingResolver
+import li.gkd.app.authoring.GuidedRecordingSession
+import li.gkd.app.authoring.GuidedRecordingSignal
+import li.gkd.app.authoring.GuidedRuleAction
+import li.gkd.app.authoring.GuidedRuleCandidate
+import li.gkd.app.authoring.GuidedRuleData
+import li.gkd.app.authoring.GuidedRuleDraft
+import li.gkd.app.authoring.GuidedRuleEligibility
+import li.gkd.app.authoring.GuidedRuleReadResult
+import li.gkd.app.authoring.GuidedRuleReader
+import li.gkd.app.authoring.GuidedRuleScope
+import li.gkd.app.authoring.GuidedRuleWriteFailure
+import li.gkd.app.authoring.GuidedRuleWriteRequest
+import li.gkd.app.authoring.GuidedRuleWriteResult
+import li.gkd.app.authoring.GuidedRuleWriter
+import li.gkd.app.authoring.GuidedSaveNotice
+import li.gkd.app.authoring.GuidedSaveNotices
+import li.gkd.app.authoring.GuidedSavePlan
+import li.gkd.app.authoring.GuidedSavePlanResult
+import li.gkd.app.authoring.GuidedSavePlanner
+import li.gkd.app.authoring.GuidedSelectorCompileResult
+import li.gkd.app.authoring.GuidedSelectorCompiler
+import li.gkd.app.authoring.GuidedTapEvent
+import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.broadPlan
+import li.gkd.app.authoring.hasUsableNode
+import li.gkd.app.authoring.scanGuidedRules
+import li.gkd.app.authoring.suggestedName
+import li.gkd.app.authoring.toSelectorDraft
+import li.gkd.app.model.NodeInfo
+import li.gkd.app.platform.PlatformResult
+import li.gkd.app.resources.*
+import li.gkd.app.snapshot.SnapshotNodeAdapter
+import li.gkd.app.state.Loadable
+import li.gkd.app.subscription.RawSubscription
+import li.gkd.app.subscription.SubscriptionRepository
+import li.gkd.app.subscription.SubscriptionJson
+import li.gkd.app.ui.MainViewModel
+import li.gkd.app.ui.navigation.UpsertRuleGroupRoute
+import li.gkd.app.ui.state.BaseViewModel
+import li.gkd.app.ui.subscription.RequiredSubscription
+import li.gkd.db.SubscriptionConfigSnapshot
+import li.gkd.db.SubscriptionConfigStore
+import li.gkd.db.SubscriptionIds
+import org.jetbrains.compose.resources.getString
+
+enum class GuidedAuthoringPhase { Indexing, Picking, Editing, DeadEnd }
+
+enum class GuidedRecordingFailure { NoTap, NoNode, ScreenChanged }
+
+sealed interface GuidedPreviewState {
+    data object NoPreview : GuidedPreviewState
+    data object Loading : GuidedPreviewState
+    data class Ready(val result: GuidedPreviewResult.Ready) : GuidedPreviewState
+    data object Defect : GuidedPreviewState
+}
+
+data class GuidedAuthoringState(
+    val phase: GuidedAuthoringPhase,
+    val appId: String?,
+    val appName: String?,
+    val draft: GuidedRuleDraft = GuidedRuleDraft(),
+    val pick: GuidedPick? = null,
+    val preview: GuidedPreviewState = GuidedPreviewState.NoPreview,
+    val scan: Loadable<List<GuidedRuleCandidate>> = Loadable.Loading,
+    val existingHits: List<GuidedExistingRuleHit> = emptyList(),
+    val existingDismissed: Boolean = true,
+    val editing: GuidedRuleCandidate.App? = null,
+    val notice: GuidedSaveNotice = GuidedSaveNotice.None,
+    val contextError: Boolean = false,
+    val dynamicText: Boolean = false,
+    val nameEdited: Boolean = false,
+    val manual: Boolean = false,
+    val saving: Boolean = false,
+    val saveError: Boolean = false,
+    val contextMode: GuidedContextMode? = null,
+    val overlap: List<NodeInfo>? = null,
+    val recordingFailure: GuidedRecordingFailure? = null,
+    val recordSpent: Boolean = false,
+    val suggestedName: String = "",
+) {
+    fun canRetryCapture(liveCapture: Boolean): Boolean =
+        phase == GuidedAuthoringPhase.DeadEnd && appId != null && liveCapture && !manual
+
+    val canPick: Boolean get() = phase == GuidedAuthoringPhase.Picking
+
+    fun afterIndexing(usable: Boolean): GuidedAuthoringState =
+        if (phase != GuidedAuthoringPhase.Indexing) {
+            this
+        } else {
+            copy(
+                phase = if (usable) {
+                    GuidedAuthoringPhase.Picking
+                } else {
+                    GuidedAuthoringPhase.DeadEnd
+                },
+            )
+        }
+
+    fun afterRetryCapture(usable: Boolean): GuidedAuthoringState =
+        if (usable) {
+            copy(phase = GuidedAuthoringPhase.Picking, scan = Loadable.Loading)
+        } else {
+            this
+        }
+
+    val scanFailed: Boolean get() = scan is Loadable.Failure
+
+    fun afterRetryScan(): GuidedAuthoringState =
+        if (scan is Loadable.Failure) copy(scan = Loadable.Loading) else this
+
+    val canSave: Boolean
+        get() {
+            if (saving || draft.target.isEmpty() || appId == null) return false
+            if (preview is GuidedPreviewState.Defect) return false
+            if (scan !is Loadable.Ready) return false
+            return draft.target.all { condition ->
+                when (condition) {
+                    is GuidedCondition.Text -> condition.value.isNotBlank()
+                    is GuidedCondition.Description -> condition.value.isNotBlank()
+                    is GuidedCondition.ViewId -> condition.value.isNotBlank()
+                    is GuidedCondition.FullId -> condition.value.isNotBlank()
+                    is GuidedCondition.TypeName -> condition.value.isNotBlank()
+                    GuidedCondition.Clickable, GuidedCondition.VisibleToUser -> true
+                }
+            }
+        }
+}
+
+fun GuidedAuthoringState.resetSession(
+    phase: GuidedAuthoringPhase,
+    draft: GuidedRuleDraft = GuidedRuleDraft(),
+    pick: GuidedPick? = null,
+    manual: Boolean = false,
+    dynamicText: Boolean = false,
+    recorded: Boolean = false,
+): GuidedAuthoringState = copy(
+    phase = phase,
+    draft = draft,
+    pick = pick,
+    preview = GuidedPreviewState.NoPreview,
+    existingHits = emptyList(),
+    existingDismissed = true,
+    editing = null,
+    contextError = false,
+    dynamicText = dynamicText,
+    nameEdited = false,
+    manual = manual,
+    saveError = false,
+    contextMode = null,
+    overlap = null,
+    recordingFailure = null,
+    recordSpent = recordSpent || recorded,
+    suggestedName = draft.action.suggestedName(pick?.actable?.let(GuidedNodeLabel::of)),
+)
+
+enum class GuidedDuplicateKind { Replaceable, AuthoringAdvanced, Foreign }
+
+data class GuidedDuplicateState(
+    val candidate: GuidedRuleCandidate,
+    val kind: GuidedDuplicateKind,
+)
+
+data class GuidedBroadState(
+    val plan: GuidedSavePlan,
+    val confirming: Boolean = false,
+)
+
+data class GuidedRawTarget(
+    val groupKey: Int?,
+    val global: Boolean,
+)
+
+/** The rule identity captured before the raw editor can write over the guided draft. */
+private data class RawHandoffIntent(
+    val appId: String,
+    val groupKey: Int?,
+    val global: Boolean,
+    val ruleKey: Int?,
+    val groupBefore: RawSubscription.RawAppGroup?,
+    val globalGroupBefore: RawSubscription.RawGlobalGroup?,
+    val groupKeysBefore: Set<Int>,
+    val draftBefore: GuidedRuleDraft,
+    val nameEditedBefore: Boolean,
+)
+
+class GuidedAuthoringViewModel(
+    private val startManualAppId: String? = null,
+) : BaseViewModel() {
+    private var capture: GuidedCapture? = GuidedCaptureStore.current.value
+    private var adapter: SnapshotNodeAdapter? = null
+    private var nodes: List<NodeInfo> = emptyList()
+    private var usable = false
+
+    private var ruleScope: GuidedRuleScope? = null
+    private var rawHandoffIntent: RawHandoffIntent? = null
+    private var authoringGroupName: String = ""
+    private var baseline: GuidedRuleDraft = GuidedRuleDraft()
+    private var preEditDraft: GuidedRuleDraft? = null
+    private var preEditNameEdited: Boolean = false
+    private var previewJob: Job? = null
+    private var broadJob: Job? = null
+    private var detectionJob: Job? = null
+    private var persistJob: Job? = null
+    private var recordingWaitJob: Job? = null
+    private var pendingRecordedAction: GuidedRuleAction? = null
+    private var screenChangedWhileResolving = false
+    private val captureRevision = MutableStateFlow(0)
+
+    private val initialPhase = when {
+        startManualAppId != null -> GuidedAuthoringPhase.Editing
+        capture == null -> GuidedAuthoringPhase.DeadEnd
+        else -> GuidedAuthoringPhase.Indexing
+    }
+
+    private val initialState = GuidedAuthoringState(
+        phase = initialPhase,
+        appId = startManualAppId ?: capture?.snapshot?.appId,
+        appName = capture?.snapshot?.appInfo?.name ?: capture?.snapshot?.appId,
+        manual = startManualAppId != null,
+        suggestedName = GuidedRuleAction.Click.suggestedName(label = null),
+    )
+
+    val state: StateFlow<GuidedAuthoringState>
+        field = MutableStateFlow(initialState)
+
+    val broad: StateFlow<GuidedBroadState?>
+        field = MutableStateFlow(null)
+
+    val duplicate: StateFlow<GuidedDuplicateState?>
+        field = MutableStateFlow(null)
+
+    val discardPrompt: StateFlow<Boolean>
+        field = MutableStateFlow(false)
+
+    val saved: StateFlow<Boolean>
+        field = MutableStateFlow(false)
+
+    val finished: StateFlow<Boolean>
+        field = MutableStateFlow(false)
+
+    val rawHandoff: StateFlow<GuidedRawTarget?>
+        field = MutableStateFlow(null)
+
+    val hasCapture: Boolean get() = capture != null
+    val hasPreview: Boolean get() = adapter != null
+    val fromSnapshot: Boolean get() = capture?.fromSnapshot == true
+    private val canRetryCapture: Boolean get() = state.value.canRetryCapture(liveCapture = !fromSnapshot)
+    val capturedAt: Long get() = capture?.capturedAt ?: 0L
+    val screenshot: ByteArray? get() = capture?.screenshot
+    val snapshot: li.gkd.app.model.ComplexSnapshot? get() = capture?.snapshot
+
+    fun resolvePick(node: NodeInfo): GuidedPick? {
+        if (!state.value.canPick) return null
+        return adapter?.let { GuidedPickResolver.resolve(node, it) }
+    }
+
+    init {
+        if (initialPhase == GuidedAuthoringPhase.Indexing) capture?.let(::indexCapture)
+        viewModelScope.launch {
+            authoringGroupName = getString(Res.string.guided_authoring_group_name)
+            loadRuleScope()
+        }
+        viewModelScope.launch {
+            GuidedRecordingSession.signals.collect { signal ->
+                when (signal) {
+                    is GuidedRecordingSignal.Tap -> onRecordedTap(signal.event)
+                    GuidedRecordingSignal.Stopped -> setRecordingFailure(GuidedRecordingFailure.NoTap)
+                    GuidedRecordingSignal.ScreenChanged -> onScreenChanged()
+                }
+            }
+        }
+    }
+
+    /**
+     * A1: the frozen capture is already on screen while the node adapter is built off the main
+     * thread; completion routes to A2 for a usable tree and A9 otherwise.
+     */
+    private fun indexCapture(capture: GuidedCapture) {
+        viewModelScope.launch {
+            val indexed = withContext(Dispatchers.Default) {
+                val nodes = capture.snapshot.nodes
+                IndexedCapture(
+                    adapter = nodes.takeIf { it.isNotEmpty() }?.let(::SnapshotNodeAdapter),
+                    nodes = nodes,
+                    usable = nodes.hasUsableNode(),
+                )
+            }
+            adapter = indexed.adapter
+            nodes = indexed.nodes
+            usable = indexed.usable
+            state.update { it.afterIndexing(usable = indexed.usable) }
+        }
+    }
+
+    private data class IndexedCapture(
+        val adapter: SnapshotNodeAdapter?,
+        val nodes: List<NodeInfo>,
+        val usable: Boolean,
+    )
+
+    fun recordingContext(): GuidedRecordingContext? {
+        val capture = capture ?: return null
+        if (capture.fromSnapshot || !usable) return null
+        if (state.value.phase != GuidedAuthoringPhase.Picking) return null
+        return GuidedRecordingContext(
+            appId = capture.snapshot.appId,
+            appName = state.value.appName ?: capture.snapshot.appId,
+            activityId = capture.snapshot.activityId,
+        )
+    }
+
+    fun prepareRecording() {
+        recordingWaitJob?.cancel()
+        pendingRecordedAction = null
+        screenChangedWhileResolving = false
+        state.update { it.copy(recordingFailure = null, overlap = null) }
+    }
+
+    fun dismissRecordingFailure() {
+        state.update { it.copy(recordingFailure = null) }
+    }
+
+    fun adoptRecapturedCapture(result: PlatformResult<Boolean>) {
+        val captured = when (result) {
+            is PlatformResult.Success -> result.value
+            PlatformResult.Unsupported -> return
+        }
+        if (!captured) {
+            recaptureFailed()
+            return
+        }
+        val capture = GuidedCaptureStore.current.value ?: return
+        val adapter = capture.snapshot.nodes
+            .takeIf { it.isNotEmpty() }
+            ?.let(::SnapshotNodeAdapter)
+            ?: return
+        this.capture = capture
+        this.adapter = adapter
+        nodes = capture.snapshot.nodes
+        usable = nodes.hasUsableNode()
+        state.update { it.copy(recordingFailure = null) }
+    }
+
+    fun recaptureFailed() {
+        recordingWaitJob?.cancel()
+        state.update {
+            it.copy(
+                phase = GuidedAuthoringPhase.DeadEnd,
+                recordingFailure = null,
+                overlap = null,
+            )
+        }
+    }
+
+    fun adoptRetryCapture(result: PlatformResult<Boolean>) {
+        if (!canRetryCapture) return
+        val captured = when (result) {
+            is PlatformResult.Success -> result.value
+            PlatformResult.Unsupported -> return
+        }
+        val capture = if (captured) GuidedCaptureStore.current.value else null
+        val nodes = capture?.snapshot?.nodes?.takeIf { it.hasUsableNode() }
+        if (capture != null && nodes != null) {
+            this.capture = capture
+            adapter = SnapshotNodeAdapter(nodes)
+            this.nodes = nodes
+            usable = true
+            state.update { it.afterRetryCapture(usable = true) }
+            captureRevision.value++
+        } else {
+            state.update { it.afterRetryCapture(usable = false) }
+        }
+    }
+
+    private fun onRecordedTap(event: GuidedTapEvent) {
+        if (capture == null) return
+        screenChangedWhileResolving = false
+        when (val result = GuidedRecordingResolver.resolve(event, nodes)) {
+            GuidedRecordingResolution.NotFound -> {
+                recordingWaitJob?.cancel()
+                recordingWaitJob = viewModelScope.launch {
+                    delay(500)
+                    val changed = screenChangedWhileResolving
+                    screenChangedWhileResolving = false
+                    GuidedRecordingSession.finish()
+                    setRecordingFailure(
+                        if (changed) GuidedRecordingFailure.ScreenChanged
+                        else GuidedRecordingFailure.NoNode
+                    )
+                }
+            }
+
+            is GuidedRecordingResolution.Found -> {
+                val action = if (event.longClick) {
+                    GuidedRuleAction.LongPress
+                } else {
+                    GuidedRuleAction.Click
+                }
+                if (result.nodes.size > 1) {
+                    pendingRecordedAction = action
+                    GuidedRecordingSession.finish()
+                    state.update {
+                        it.copy(recordingFailure = null, overlap = result.nodes)
+                    }
+                } else {
+                    GuidedRecordingSession.finish()
+                    selectNode(result.nodes.first(), action, recorded = true)
+                }
+            }
+        }
+    }
+
+    private fun onScreenChanged() {
+        if (GuidedRecordingSession.phase == GuidedRecordingPhase.Resolving) {
+            screenChangedWhileResolving = true
+        } else {
+            setRecordingFailure(GuidedRecordingFailure.ScreenChanged)
+        }
+    }
+
+    private fun setRecordingFailure(failure: GuidedRecordingFailure) {
+        pendingRecordedAction = null
+        state.update {
+            if (it.phase != GuidedAuthoringPhase.Picking) it
+            else it.copy(recordingFailure = failure, overlap = null)
+        }
+    }
+
+    private suspend fun loadRuleScope() {
+        combine(
+            SubscriptionRepository.snapshotFlow,
+            SubscriptionConfigStore.observe(),
+            AppInfoRepository.appInfoMapFlow,
+            launcherAppIdFlow,
+            captureRevision,
+        ) { loaded, configs, apps, launcher, _ ->
+            RuleScopeInput(loaded, configs, apps, launcher)
+        }.collect { input ->
+            val loaded = input.loaded
+            if (loaded !is Loadable.Ready) return@collect
+            val appId = state.value.appId ?: return@collect
+            val local = loaded.value.subscriptions[SubscriptionIds.LOCAL] ?: return@collect
+            val scope = GuidedRuleScope(
+                local = local,
+                configs = input.configs,
+                appId = appId,
+                activityId = capture?.snapshot?.activityId,
+                appInfo = input.apps[appId],
+                launcherAppId = input.launcher,
+                systemAppIds = input.apps.values.filter { it.isSystem }
+                    .mapTo(mutableSetOf()) { it.id },
+            )
+            ruleScope = scope
+            val scan = withContext(Dispatchers.Default) {
+                scanGuidedRules { GuidedRuleEligibility.candidates(scope, authoringGroupName) }
+            }
+            val appName = state.value.appName?.takeIf { it != appId }
+                ?: scope.appInfo?.name ?: appId
+            state.update {
+                it.copy(
+                    appName = appName,
+                    scan = scan,
+                    notice = GuidedSaveNotices.resolve(scope, authoringGroupName),
+                )
+            }
+            reconcileRawHandoff(local)
+            if (scan is Loadable.Ready) {
+                val pick = state.value.pick
+                if (pick != null && !state.value.manual && state.value.editing == null) {
+                    detectExisting(pick, scan.value)
+                }
+            }
+        }
+    }
+
+    private data class RuleScopeInput(
+        val loaded: Loadable<li.gkd.app.subscription.SubscriptionSnapshot>,
+        val configs: SubscriptionConfigSnapshot,
+        val apps: Map<String, li.gkd.app.model.AppInfo>,
+        val launcher: String,
+    )
+
+    fun select(node: NodeInfo) {
+        if (!state.value.canPick) return
+        val action = pendingRecordedAction
+        pendingRecordedAction = null
+        selectNode(node, action ?: GuidedRuleAction.Click, recorded = action != null)
+    }
+
+    private fun selectNode(node: NodeInfo, action: GuidedRuleAction, recorded: Boolean) {
+        val adapter = adapter ?: return
+        val pick = GuidedPickResolver.resolve(node, adapter)
+        val prefill = GuidedPrefillBuilder.build(pick.actable, adapter)
+        val target = when (prefill) {
+            is GuidedPrefillResult.Success -> prefill.prefill.target
+            is GuidedPrefillResult.Failure -> emptyList()
+        }
+        val context = (prefill as? GuidedPrefillResult.Success)?.prefill?.context
+        val dynamicText = (prefill as? GuidedPrefillResult.Success)?.prefill?.dynamicText == true
+        val draft = GuidedRuleDraft(target = target, context = context, action = action)
+        baseline = draft
+        preEditDraft = null
+        state.update {
+            it.resetSession(
+                phase = GuidedAuthoringPhase.Editing,
+                draft = draft,
+                pick = pick,
+                dynamicText = dynamicText,
+                recorded = recorded,
+            )
+        }
+        refreshPreview()
+        val scan = state.value.scan
+        if (scan is Loadable.Ready) {
+            detectExisting(pick, scan.value)
+        }
+    }
+
+    private fun detectExisting(pick: GuidedPick, candidates: List<GuidedRuleCandidate>) {
+        val adapter = adapter ?: return
+        detectionJob?.cancel()
+        detectionJob = viewModelScope.launch(Dispatchers.Default) {
+            val hits = GuidedExistingRuleDetector.detect(
+                candidates, pick.picked, nodes, adapter,
+            )
+            state.update {
+                if (it.pick != pick) it
+                else it.copy(existingHits = hits, existingDismissed = hits.isEmpty())
+            }
+        }
+    }
+
+    fun refreshPreview() {
+        val adapter = adapter
+        val pick = state.value.pick
+        previewJob?.cancel()
+        if (adapter == null || pick == null) {
+            state.update { it.copy(preview = GuidedPreviewState.NoPreview) }
+            return
+        }
+        state.update { it.copy(preview = GuidedPreviewState.Loading) }
+        val draft = state.value.draft
+        previewJob = viewModelScope.launch(Dispatchers.Default) {
+            val result = GuidedPreviewBuilder.build(draft.toSelectorDraft(), pick.actable, adapter)
+            state.update {
+                if (it.draft != draft || it.pick != pick) it
+                else it.copy(
+                    preview = when (result) {
+                        GuidedPreviewResult.Incomplete -> GuidedPreviewState.NoPreview
+                        GuidedPreviewResult.Defect -> GuidedPreviewState.Defect
+                        is GuidedPreviewResult.Ready -> GuidedPreviewState.Ready(result)
+                    },
+                )
+            }
+        }
+    }
+
+    fun setAction(action: GuidedRuleAction) {
+        updateDraft { it.copy(action = action) }
+        state.update {
+            it.copy(suggestedName = action.suggestedName(it.pick?.actable?.let(GuidedNodeLabel::of)))
+        }
+    }
+
+    fun setLimitToAppOpening(enabled: Boolean) =
+        updateDraft { it.copy(limitToAppOpening = enabled) }
+
+    fun setName(value: String) {
+        state.update {
+            it.copy(draft = it.draft.copy(nameOverride = value), nameEdited = true, saveError = false)
+        }
+    }
+
+    fun addCondition(condition: GuidedCondition) = updateDraft { it.addCondition(condition) }
+
+    fun removeCondition(property: GuidedConditionProperty) =
+        updateDraft { it.removeCondition(property) }
+
+    fun updateCondition(
+        property: GuidedConditionProperty,
+        transform: (GuidedCondition) -> GuidedCondition,
+    ) = updateDraft { it.updateCondition(property, transform) }
+
+    fun setTextOperator(property: GuidedConditionProperty, operator: GuidedTextOperator) =
+        updateCondition(property) { condition ->
+            when (condition) {
+                is GuidedCondition.Text -> condition.copy(operator = operator)
+                is GuidedCondition.Description -> condition.copy(operator = operator)
+                else -> condition
+            }
+        }
+
+    private fun updateDraft(
+        recheckBroad: Boolean = false,
+        transform: (GuidedRuleDraft) -> GuidedRuleDraft,
+    ) {
+        state.update { it.copy(draft = transform(it.draft), saveError = false) }
+        refreshPreview()
+        if (recheckBroad) refreshBroad()
+    }
+
+    fun showOverlap(candidates: List<NodeInfo>) {
+        if (candidates.size <= 1) {
+            candidates.firstOrNull()?.let(::select)
+        } else {
+            state.update { it.copy(overlap = candidates) }
+        }
+    }
+
+    fun dismissOverlap() {
+        pendingRecordedAction = null
+        state.update { it.copy(overlap = null) }
+    }
+
+    fun startContext(mode: GuidedContextMode = GuidedContextMode.Inside) =
+        state.update { it.copy(contextMode = mode, contextError = false) }
+
+    fun setContextMode(mode: GuidedContextMode) =
+        state.update { it.copy(contextMode = mode, contextError = false) }
+
+    fun cancelContext() = state.update { it.copy(contextMode = null) }
+
+    fun pickContextAnchor(anchor: NodeInfo) {
+        val adapter = adapter ?: return
+        val pick = state.value.pick ?: return
+        val mode = state.value.contextMode ?: return
+        when (val result = GuidedContextBuilder.build(mode, pick.actable, anchor, nodes, adapter)) {
+            is GuidedContextBuildResult.Success -> {
+                state.update { it.copy(contextMode = null, contextError = false) }
+                updateDraft(recheckBroad = true) { it.copy(context = result.context) }
+            }
+
+            is GuidedContextBuildResult.Failure -> {
+                state.update {
+                    it.copy(contextError = result.reason == GuidedContextBuildFailure.NoStableLabel)
+                }
+            }
+        }
+    }
+
+    fun removeContext() = updateDraft(recheckBroad = true) { it.copy(context = null) }
+
+    private fun refreshBroad() {
+        val adapter = adapter ?: return
+        val pick = state.value.pick ?: return
+        val scan = state.value.scan
+        if (scan !is Loadable.Ready) return
+        val draft = state.value.draft
+        val candidates = duplicateCandidates(scan.value)
+        broadJob?.cancel()
+        broadJob = viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                GuidedSavePlanner.plan(draft.toSelectorDraft(), pick.actable, adapter, candidates)
+            }
+            val current = state.value
+            if (current.draft != draft || current.pick != pick) return@launch
+            broad.value = result.broadPlan()?.let(::GuidedBroadState)
+        }
+    }
+
+    fun dismissExisting() = state.update { it.copy(existingDismissed = true) }
+
+    fun editExisting(hit: GuidedExistingRuleHit) {
+        val candidate = hit.candidate as? GuidedRuleCandidate.App
+            ?: return requestRawHandoff(hit.candidate)
+        if (!candidate.inAuthoringGroup) return requestRawHandoff(candidate)
+        val data = when (val result = GuidedRuleReader.read(candidate.rule)) {
+            is GuidedRuleReadResult.Success -> result.data
+            is GuidedRuleReadResult.Unsupported -> return requestRawHandoff(candidate)
+        }
+        preEditDraft = state.value.draft
+        preEditNameEdited = state.value.nameEdited
+        val draft = data.toDraft()
+        baseline = draft
+        state.update {
+            it.copy(
+                phase = GuidedAuthoringPhase.Editing,
+                draft = draft,
+                nameEdited = true,
+                editing = candidate,
+                existingDismissed = true,
+                saveError = false,
+                contextMode = null,
+                overlap = null,
+                suggestedName = draft.action.suggestedName(
+                    it.pick?.actable?.let(GuidedNodeLabel::of),
+                ),
+            )
+        }
+        refreshPreview()
+    }
+
+    private fun GuidedRuleData.toDraft() = GuidedRuleDraft(
+        target = draft.target,
+        context = draft.context,
+        action = action,
+        nameOverride = name,
+        limitToAppOpening = limitToAppOpening,
+    )
+
+    private fun exitEdit() {
+        val draft = preEditDraft ?: return
+        preEditDraft = null
+        baseline = draft
+        state.update {
+            it.copy(
+                draft = draft,
+                nameEdited = preEditNameEdited,
+                editing = null,
+                existingDismissed = true,
+                saveError = false,
+                suggestedName = draft.action.suggestedName(
+                    it.pick?.actable?.let(GuidedNodeLabel::of),
+                ),
+            )
+        }
+        refreshPreview()
+    }
+
+    fun requestRawHandoff(preferred: GuidedRuleCandidate? = null) {
+        val appId = state.value.appId ?: return
+        val local = ruleScope?.local
+        val appGroups = local?.apps?.find { it.id == appId }?.groups.orEmpty()
+        val authoringGroup = appGroups.find { it.name == authoringGroupName }
+        val target = when (preferred) {
+            is GuidedRuleCandidate.App -> GuidedRawTarget(preferred.groupKey, global = false)
+            is GuidedRuleCandidate.Global -> GuidedRawTarget(preferred.groupKey, global = true)
+            null -> GuidedRawTarget(authoringGroup?.key, global = false)
+        }
+        val groupBefore = when (preferred) {
+            is GuidedRuleCandidate.App -> preferred.group
+            is GuidedRuleCandidate.Global -> null
+            null -> authoringGroup
+        }
+        rawHandoffIntent = RawHandoffIntent(
+            appId = appId,
+            groupKey = target.groupKey,
+            global = target.global,
+            ruleKey = preferred?.ruleKey,
+            groupBefore = groupBefore,
+            globalGroupBefore = (preferred as? GuidedRuleCandidate.Global)?.group,
+            groupKeysBefore = appGroups.mapTo(mutableSetOf()) { it.key },
+            draftBefore = state.value.draft,
+            nameEditedBefore = state.value.nameEdited,
+        )
+        rawHandoff.value = target
+    }
+
+    fun consumeRawHandoff() {
+        rawHandoff.value = null
+    }
+
+    /**
+     * The raw editor is the only writer. Once its save reaches the store, either reopen the
+     * guided draft on the saved rule or end the session where the raw editor remains on top.
+     */
+    private fun reconcileRawHandoff(local: RawSubscription) {
+        val intent = rawHandoffIntent ?: return
+        if (intent.global) {
+            val group = local.globalGroups.find { it.key == intent.groupKey } ?: return
+            if (group == intent.globalGroupBefore) return
+            endRawHandoff()
+            return
+        }
+        val appGroups = local.apps.find { it.id == intent.appId }?.groups.orEmpty()
+        val group = if (intent.groupKey != null) {
+            appGroups.find { it.key == intent.groupKey }
+        } else {
+            appGroups.find { it.name == authoringGroupName }
+        }
+        if (group == null) {
+            val before = intent.groupBefore
+            val changed = if (before == null) {
+                appGroups.any { it.key !in intent.groupKeysBefore }
+            } else {
+                appGroups.none { it == before }
+            }
+            if (changed) endRawHandoff()
+            return
+        }
+        if (group == intent.groupBefore) return
+        val rule = when {
+            intent.ruleKey != null -> group.rules.find { it.key == intent.ruleKey }
+            else -> {
+                val beforeRules = intent.groupBefore?.rules.orEmpty()
+                group.rules.firstOrNull { candidate -> beforeRules.none { it == candidate } }
+            }
+        }
+        val data = rule?.let { GuidedRuleReader.read(it) }
+        if (group.name != authoringGroupName || data !is GuidedRuleReadResult.Success) {
+            endRawHandoff()
+            return
+        }
+        applyRawHandoff(intent, group, rule, data.data)
+    }
+
+    private fun applyRawHandoff(
+        intent: RawHandoffIntent,
+        group: RawSubscription.RawAppGroup,
+        rule: RawSubscription.RawAppRule,
+        data: GuidedRuleData,
+    ) {
+        rawHandoffIntent = null
+        val draft = data.toDraft()
+        baseline = draft
+        preEditDraft = intent.draftBefore
+        preEditNameEdited = intent.nameEditedBefore
+        state.update {
+            it.resetSession(
+                phase = GuidedAuthoringPhase.Editing,
+                draft = draft,
+                pick = it.pick,
+                manual = it.manual,
+            ).copy(
+                editing = GuidedRuleCandidate.App(
+                    group = group,
+                    rule = rule,
+                    inAuthoringGroup = group.name == authoringGroupName,
+                ),
+                nameEdited = data.name != null,
+                saving = false,
+            )
+        }
+        refreshPreview()
+        val navigator = MainViewModel.requireCurrent().navigator
+        if (navigator.topRoute is UpsertRuleGroupRoute) navigator.pop()
+    }
+
+    private fun endRawHandoff() {
+        rawHandoffIntent = null
+        closeSession()
+    }
+
+    fun startManual() {
+        if (state.value.appId == null) return
+        val draft = GuidedRuleDraft()
+        baseline = draft
+        preEditDraft = null
+        state.update {
+            it.resetSession(
+                phase = GuidedAuthoringPhase.Editing,
+                draft = draft,
+                manual = true,
+            )
+        }
+    }
+
+    fun requestSave() {
+        val current = state.value
+        if (!current.canSave || persistJob?.isActive == true) return
+        rawHandoffIntent = null
+        val scan = current.scan
+        if (scan !is Loadable.Ready) return
+        state.update { it.copy(saving = true, saveError = false) }
+        val adapter = adapter
+        if (current.manual || adapter == null || current.pick == null) {
+            saveManual(scan.value)
+            return
+        }
+        val draft = current.draft
+        val actable = current.pick.actable
+        val candidates = duplicateCandidates(scan.value)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.Default) {
+                GuidedSavePlanner.plan(draft.toSelectorDraft(), actable, adapter, candidates)
+            }
+            state.update { it.copy(saving = false) }
+            when (result) {
+                GuidedSavePlanResult.Incomplete -> state.update { it.copy(saveError = true) }
+                GuidedSavePlanResult.Defect -> state.update { it.copy(saveError = true) }
+                is GuidedSavePlanResult.Ready -> {
+                    val broadPlan = result.broadPlan()
+                    if (broadPlan != null) {
+                        broad.value = GuidedBroadState(broadPlan)
+                    } else {
+                        handleDuplicate(result.plan)
+                    }
+                }
+            }
+        }
+    }
+
+    private fun saveManual(candidates: List<GuidedRuleCandidate>) {
+        val draft = state.value.draft
+        val compiled = GuidedSelectorCompiler.compile(draft.toSelectorDraft())
+        val selector = when (compiled) {
+            is GuidedSelectorCompileResult.Success -> compiled.selector
+            is GuidedSelectorCompileResult.Failure -> {
+                state.update { it.copy(saving = false, saveError = true) }
+                return
+            }
+        }
+        state.update { it.copy(saving = false) }
+        when (val duplicate = GuidedDuplicateCheck.find(duplicateCandidates(candidates), selector)) {
+            GuidedDuplicateResult.None -> persist(replaceRuleKey = null)
+            is GuidedDuplicateResult.Found -> showDuplicate(duplicate)
+        }
+    }
+
+    fun narrowBroad() {
+        broad.value = null
+        startContext(GuidedContextMode.Inside)
+    }
+
+    fun confirmBroad() {
+        broad.update { it?.copy(confirming = true) }
+    }
+
+    fun cancelBroadConfirm() {
+        broad.update { it?.copy(confirming = false) }
+    }
+
+    fun keepBroad() {
+        val plan = broad.value?.plan ?: return
+        broad.value = null
+        handleDuplicate(plan)
+    }
+
+    fun cancelBroad() {
+        broad.value = null
+    }
+
+    private fun handleDuplicate(plan: GuidedSavePlan) {
+        when (val duplicate = plan.duplicate) {
+            GuidedDuplicateResult.None -> persist(replaceRuleKey = null)
+            is GuidedDuplicateResult.Found -> showDuplicate(duplicate)
+        }
+    }
+
+    private fun showDuplicate(duplicate: GuidedDuplicateResult.Found) {
+        val candidate = duplicate.candidate
+        val kind = when {
+            candidate is GuidedRuleCandidate.App && candidate.inAuthoringGroup && duplicate.canReplace ->
+                GuidedDuplicateKind.Replaceable
+
+            candidate is GuidedRuleCandidate.App && candidate.inAuthoringGroup ->
+                GuidedDuplicateKind.AuthoringAdvanced
+
+            else -> GuidedDuplicateKind.Foreign
+        }
+        this.duplicate.value = GuidedDuplicateState(candidate, kind)
+    }
+
+    fun replaceDuplicate() {
+        val candidate = duplicate.value?.candidate as? GuidedRuleCandidate.App ?: return
+        val key = candidate.ruleKey ?: return
+        duplicate.value = null
+        persist(replaceRuleKey = key)
+    }
+
+    fun keepBothDuplicate() {
+        duplicate.value = null
+        persist(replaceRuleKey = null)
+    }
+
+    fun editDuplicateInJson() {
+        val candidate = duplicate.value?.candidate ?: return
+        duplicate.value = null
+        requestRawHandoff(candidate)
+    }
+
+    fun cancelDuplicate() {
+        duplicate.value = null
+    }
+
+    fun retrySave() {
+        state.update { it.copy(saveError = false) }
+        requestSave()
+    }
+
+    fun retryScan() {
+        if (!state.value.scanFailed) return
+        state.update { it.afterRetryScan() }
+        captureRevision.value++
+    }
+
+    private fun persist(replaceRuleKey: Int?) {
+        val scope = ruleScope ?: run {
+            state.update { it.copy(saveError = true) }
+            return
+        }
+        val current = state.value
+        val appId = current.appId ?: run {
+            state.update { it.copy(saveError = true) }
+            return
+        }
+        val draft = current.draft
+        val editingKey = current.editing?.ruleKey
+        state.update { it.copy(saving = true, saveError = false) }
+        val required = RequiredSubscription(SubscriptionIds.LOCAL, viewModelScope)
+        persistJob = viewModelScope.launch {
+            val ruleName = if (current.nameEdited) {
+                draft.nameOverride?.takeIf { it.isNotBlank() }
+            } else {
+                current.suggestedName
+            }
+            val request = GuidedRuleWriteRequest(
+                appId = appId,
+                appName = current.appName,
+                authoringGroupName = authoringGroupName,
+                ruleName = ruleName,
+                action = draft.action,
+                draft = draft.toSelectorDraft(),
+                limitToAppOpening = draft.limitToAppOpening,
+                replaceRuleKey = replaceRuleKey ?: editingKey,
+            )
+            var failure: GuidedRuleWriteFailure? = null
+            val completed = runCatching {
+                required.update { subscription ->
+                    when (val result = GuidedRuleWriter.write(subscription, request)) {
+                        is GuidedRuleWriteResult.Success -> result.subscription
+                        is GuidedRuleWriteResult.Failure -> {
+                            failure = result.reason
+                            subscription
+                        }
+                    }
+                }
+            }.onFailure { cause ->
+                if (cause is CancellationException) throw cause
+            }
+            if (completed.isSuccess && failure == null) {
+                GuidedCaptureStore.clear()
+                saved.value = true
+            } else {
+                state.update { it.copy(saving = false, saveError = true) }
+            }
+        }
+    }
+
+    fun rawDraftText(): String? {
+        val draft = state.value.draft
+        val selector = when (val result = GuidedSelectorCompiler.compile(draft.toSelectorDraft())) {
+            is GuidedSelectorCompileResult.Success -> result.selector
+            is GuidedSelectorCompileResult.Failure -> return null
+        }
+        val name = draft.nameOverride?.takeIf { it.isNotBlank() }
+        return buildString {
+            append("{\n")
+            append("  name: ").append(SubscriptionJson.toJson5String(authoringGroupName)).append(",\n")
+            append("  rules: [\n    {\n")
+            if (name != null) {
+                append("      name: ").append(SubscriptionJson.toJson5String(name)).append(",\n")
+            }
+            append("      action: ").append(SubscriptionJson.toJson5String(draft.action.key)).append(",\n")
+            append("      matches: [").append(SubscriptionJson.toJson5String(selector)).append("]\n")
+            append("    }\n  ]\n}")
+        }
+    }
+
+    fun labelSuggestions(property: GuidedConditionProperty): List<String> {
+        val values = nodes.mapNotNull { node ->
+            when (property) {
+                GuidedConditionProperty.Text -> node.attr.text
+                GuidedConditionProperty.Description -> node.attr.desc
+                GuidedConditionProperty.ViewId -> node.attr.vid
+                GuidedConditionProperty.FullId -> node.attr.id
+                GuidedConditionProperty.TypeName -> node.attr.name
+                GuidedConditionProperty.Clickable,
+                GuidedConditionProperty.VisibleToUser -> null
+            }
+        }
+        return values.map { it.replace(Regex("\\s+"), " ").trim() }
+            .filter { it.isNotEmpty() }
+            .distinct()
+            .take(4)
+    }
+
+    private fun duplicateCandidates(all: List<GuidedRuleCandidate>): List<GuidedRuleCandidate> {
+        val editingKey = state.value.editing?.ruleKey
+        val editingGroup = state.value.editing?.groupKey
+        return all.filterNot { candidate ->
+            candidate is GuidedRuleCandidate.App &&
+                    candidate.ruleKey == editingKey &&
+                    candidate.groupKey == editingGroup
+        }
+    }
+
+    fun canSave(): Boolean = state.value.canSave
+
+    fun draftChanged(): Boolean = state.value.draft != baseline
+
+    fun requestBack() {
+        val current = state.value
+        if (current.editing != null) {
+            exitEdit()
+            return
+        }
+        if (current.phase == GuidedAuthoringPhase.Editing && !draftChanged()) {
+            if (current.manual) closeSession() else backToPick()
+            return
+        }
+        if (current.phase == GuidedAuthoringPhase.Picking) {
+            closeSession()
+            return
+        }
+        if (draftChanged()) {
+            discardPrompt.value = true
+        } else {
+            closeSession()
+        }
+    }
+
+    fun backToPick() {
+        previewJob?.cancel()
+        broadJob?.cancel()
+        detectionJob?.cancel()
+        recordingWaitJob?.cancel()
+        pendingRecordedAction = null
+        screenChangedWhileResolving = false
+        state.update { it.resetSession(phase = GuidedAuthoringPhase.Picking) }
+        baseline = GuidedRuleDraft()
+    }
+
+    fun dismissDiscard() {
+        discardPrompt.value = false
+    }
+
+    fun confirmDiscard() {
+        discardPrompt.value = false
+        closeSession()
+    }
+
+    fun closeSession() {
+        rawHandoffIntent = null
+        previewJob?.cancel()
+        broadJob?.cancel()
+        detectionJob?.cancel()
+        persistJob?.cancel()
+        recordingWaitJob?.cancel()
+        GuidedRecordingSession.finish()
+        GuidedCaptureStore.clear()
+        finished.value = true
+    }
+
+    fun consumeSaved() {
+        saved.value = false
+    }
+
+    fun consumeFinished() {
+        finished.value = false
+    }
+
+    override fun onCleared() {
+        GuidedRecordingSession.finish()
+        GuidedCaptureStore.clear()
+    }
+}

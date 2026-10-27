@@ -195,13 +195,37 @@ abstract class OverlayWindowService(
     protected val isOverlayContentHidden
         get() = shareContext.overlayContentHidden
 
+    private var windowParams: WindowManager.LayoutParams? = null
+    private var contentVisible = true
+    private var hiddenForCapture = false
+
+    // Skipping the draw leaves the last buffer on screen when the window shrinks to 0x0,
+    // so hiding a surface has to go through the window alpha instead.
+    private fun applyOverlayAlpha() {
+        val params = windowParams ?: return
+        val alpha = if (contentVisible && !hiddenForCapture) 1f else 0f
+        if (params.alpha == alpha) return
+        params.alpha = alpha
+        app.windowManager.updateViewLayout(view, params)
+    }
+
+    protected fun setOverlayContentVisible(visible: Boolean) {
+        if (contentVisible == visible) return
+        contentVisible = visible
+        applyOverlayAlpha()
+    }
+
     protected suspend fun <T> withAllOverlaysHidden(block: suspend () -> T): T {
         shareContext.overlayContentHidden = true
+        hiddenForCapture = true
         return try {
+            applyOverlayAlpha()
             awaitOverlayContentHidden()
             block()
         } finally {
+            hiddenForCapture = false
             shareContext.overlayContentHidden = false
+            applyOverlayAlpha()
         }
     }
 
@@ -273,6 +297,7 @@ abstract class OverlayWindowService(
             x = positionFlow.value.first()
             y = positionFlow.value.last()
         }
+        windowParams = layoutParams
         var screenWidth = ScreenUtils.getWidth()
         var screenHeight = ScreenUtils.getHeight()
         var paramsXy = layoutParams.x to layoutParams.y
@@ -391,6 +416,7 @@ abstract class OverlayWindowService(
             }
         }
         app.windowManager.addView(view, layoutParams)
+        applyOverlayAlpha()
     }
 
 }

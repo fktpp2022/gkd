@@ -1,5 +1,8 @@
 package li.gkd.app.ui.platform
 
+import androidx.compose.runtime.Composable
+import li.gkd.app.authoring.GuidedRecordingContext
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.settings.SettingsRepository
 import li.gkd.app.DesktopRuntime
 import li.gkd.app.SimulatedService
@@ -20,3 +23,19 @@ actual fun UiHost.changeAutomatorMode(mode: AutomatorMode) {
     DesktopRuntime.requireCurrent().services.setEnabled(SimulatedService.Accessibility, false)
     DesktopRuntime.requireCurrent().services.setEnabled(SimulatedService.Automation, false)
 }
+
+actual fun UiHost.finishGuidedAuthoring() {}
+
+@Composable
+actual fun guidedRecordingSupported(): Boolean = false
+
+actual fun UiHost.startGuidedRecording(context: GuidedRecordingContext): PlatformResult<Unit> =
+    PlatformResult.Unsupported
+
+actual suspend fun UiHost.captureAndStartGuidedRecording(
+    appId: String,
+    appName: String?,
+): PlatformResult<Boolean> = PlatformResult.Unsupported
+
+actual suspend fun UiHost.recaptureGuidedAuthoring(appId: String): PlatformResult<Boolean> =
+    PlatformResult.Unsupported

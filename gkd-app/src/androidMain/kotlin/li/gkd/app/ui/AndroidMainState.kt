@@ -23,6 +23,7 @@ import li.gkd.app.storage.FileSource
 import li.gkd.app.storage.StorageMaintenance
 import li.gkd.app.ui.home.BottomNavItem
 import li.gkd.app.ui.navigation.GkdLink
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.PrivilegeServiceRoute
 import li.gkd.app.settings.AutomatorMode
 import li.gkd.app.ui.share.ActivityResultRequests
@@ -85,7 +86,9 @@ class AndroidMainState(
         LogUtils.d(intent)
         val uri = intent.data?.normalizeScheme()
         val source = intent.getStringExtra(EntryActivity.activityNavSourceName)
-        if (uri?.scheme == "gkd") {
+        if (intent.action == GuidedAuthoringLaunch.action) {
+            mainVm.navigator.navigate(GuidedAuthoringRoute(fromOverlay = true))
+        } else if (uri?.scheme == "gkd") {
             handleGkdUri(uri)
         } else if (source == OpenFileActivity::class.java.name && uri != null) {
             if (!mainVm.dialogRequests.confirm(

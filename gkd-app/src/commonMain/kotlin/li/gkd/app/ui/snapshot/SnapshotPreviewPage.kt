@@ -35,6 +35,7 @@ import li.gkd.app.ui.component.GkRetainedSheet
 import li.gkd.app.ui.component.LocalEditorWindowInsets
 import li.gkd.app.ui.image.appImageLoader
 import li.gkd.app.ui.navigation.AppRoute
+import li.gkd.app.ui.navigation.GuidedAuthoringRoute
 import li.gkd.app.ui.navigation.ImagePreviewItem
 import li.gkd.app.ui.navigation.ImagePreviewRoute
 import li.gkd.app.ui.navigation.SnapshotPageRoute
@@ -42,6 +43,8 @@ import li.gkd.app.ui.navigation.SnapshotPreviewRoute
 import li.gkd.app.ui.page.GkImagePreviewContent
 import li.gkd.app.ui.platform.GkSystemBars
 import li.gkd.app.ui.platform.UiHost
+import li.gkd.app.ui.share.launchUi
+import li.gkd.app.util.ToastUtils
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -54,6 +57,8 @@ fun SnapshotPreviewPage(
     val replaceRoute: (AppRoute) -> Unit = { mainVm.navigator.navigate(it, true) }
     val vm = viewModel { SnapshotViewModel() }
     val shareProgress by vm.shareProgress.collectAsStateWithLifecycle()
+    val ruleReadiness by vm.ruleReadiness.collectAsStateWithLifecycle()
+    val guidedDeadEnd = stringResource(Res.string.guided_dead_end)
 
     val loadableState by vm.uiState.collectAsStateWithLifecycle()
     val state = loadableState.value
@@ -114,7 +119,7 @@ fun SnapshotPreviewPage(
                                 imageVector = GkIcons.MoreVert,
                                 contentDescription = stringResource(Res.string.more_label),
                                 colors = IconButtonDefaults.iconButtonColors(contentColor = Color.White),
-                                onClick = { vm.showActions(item.id) },
+                                onClick = { vm.showActions(item) },
                             )
                         }
                     },
@@ -167,7 +172,17 @@ fun SnapshotPreviewPage(
                         imageLoader, snapshot = snapshot,
                         appName = catalog.snapshot?.apps?.get(snapshot.appId)?.name ?: snapshot.appId,
                         sheetState = sheetState,
+                        readiness = ruleReadiness,
                         onDismissRequest = dismiss,
+                        onCreateRule = {
+                            vm.scope.launchUi {
+                                if (vm.openShownRuleAuthoring()) {
+                                    mainVm.navigator.navigate(GuidedAuthoringRoute())
+                                } else {
+                                    ToastUtils.show(guidedDeadEnd)
+                                }
+                            }
+                        },
                         onShare = { vm.shareSnapshots(listOf(snapshot), host.snapshotPlatformActions()) },
                         shareEnabled = shareProgress == null,
                         onSaveToDownloads = { actions.saveToDownloads(snapshot) },

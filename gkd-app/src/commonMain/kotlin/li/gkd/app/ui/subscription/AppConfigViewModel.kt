@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.withContext
 import li.gkd.app.app.AppInfoRepository
+import li.gkd.app.authoring.GuidedSnapshotCapture
 import li.gkd.app.resources.*
 import li.gkd.app.rule.RuleGroupConfigService
 import li.gkd.app.rule.RuleGroupTarget
@@ -160,4 +161,10 @@ class AppConfigViewModel(
                 )
             )
         }
+
+    /** Opens a guided session from this app's newest stored snapshot when it can open one. */
+    suspend fun openLatestSnapshotAuthoring(): Boolean {
+        val latest = Db.snapshotDao.queryLatest(route.appId) ?: return false
+        return GuidedSnapshotCapture.open(latest)
+    }
 }

@@ -178,6 +178,14 @@
                 android:value="Display a screenshot button for users to actively save screen information." />
         </service>
         <service
+            android:name="li.gkd.app.service.GuidedRuleButtonService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Display a button that captures the active screen so the user can create a local rule." />
+        </service>
+        <service
             android:name="li.gkd.app.service.ActivityService"
             android:exported="false"
             android:foregroundServiceType="specialUse">

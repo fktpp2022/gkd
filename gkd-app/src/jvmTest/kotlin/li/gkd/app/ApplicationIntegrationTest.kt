@@ -13,21 +13,33 @@ import kotlin.test.assertFails
 import kotlin.test.assertFailsWith
 import kotlin.test.assertFalse
 import kotlin.test.assertNotNull
+import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.yield
 import kotlinx.serialization.json.Json
+import li.gkd.app.authoring.GuidedCapture
+import li.gkd.app.authoring.GuidedCaptureStore
+import li.gkd.app.authoring.GuidedCondition
+import li.gkd.app.authoring.GuidedTextOperator
+import li.gkd.app.authoring.testNode
 import li.gkd.app.backup.BackupManager
 import li.gkd.app.crash.assertCrashReports
 import li.gkd.app.model.AppInfo
 import li.gkd.app.model.AppInventory
+import li.gkd.app.model.ComplexSnapshot
+import li.gkd.app.model.DeviceInfo
 import li.gkd.app.network.inspection.assertInspectionProtocol
+import li.gkd.app.platform.PlatformResult
 import li.gkd.app.resources.*
 import li.gkd.app.settings.SettingsRepository
 import li.gkd.app.settings.SettingsRepositoryChecks
@@ -39,6 +51,8 @@ import li.gkd.app.subscription.RawSubscription
 import li.gkd.app.subscription.SubscriptionJson
 import li.gkd.app.subscription.SubscriptionRepository
 import li.gkd.app.ui.MainViewModel
+import li.gkd.app.ui.authoring.GuidedAuthoringPhase
+import li.gkd.app.ui.authoring.GuidedAuthoringViewModel
 import li.gkd.app.ui.component.ToastState
 import li.gkd.app.ui.home.BottomNavItem
 import li.gkd.app.ui.home.HomeState
@@ -140,6 +154,7 @@ class ApplicationIntegrationTest {
                     .requestRejectsChangedSwitchesButAcceptsConcurrentPageAndOtherAppEdits()
                 li.gkd.app.snapshot.SnapshotCaptureRepositoryTest(appStorage()).runAll()
                 li.gkd.app.snapshot.SnapshotStoreTest(appStorage()).runAll()
+                li.gkd.app.authoring.GuidedSnapshotCaptureTest(appStorage()).runAll()
                 li.gkd.app.snapshot.assertSnapshotSharing(appStorage())
                 DesktopAppCatalogTest().profileReloadUsesSharedSelectionAndRecoversFromCorruptFile(
                     profileDir
@@ -151,6 +166,9 @@ class ApplicationIntegrationTest {
                 }
                 li.gkd.app.backup.assertBackupSnapshotConsistency()
                 assertBackupRoundTrip(appStorage())
+                assertGuidedSaveOutcomes()
+                li.gkd.app.ui.authoring.GuidedRawHandoffTest(runtime.simulator).runAll()
+                assertUnsupportedRecordingKeepsSession()
             }
             assertFailsWith<IllegalStateException> { li.gkd.app.network.isNetworkRequestAllowed() }
             assertFailsWith<IllegalStateException> { li.gkd.app.app.openAppCatalog() }
@@ -560,6 +578,107 @@ class ApplicationIntegrationTest {
             SettingsRepository.updateSettings { it.copy(subsPowerWarn = originalPowerWarning) }
         }
     }
+
+    // Closing the session while saving cancels quietly, while a real write failure stays retryable.
+    private suspend fun assertGuidedSaveOutcomes() = withContext(Dispatchers.Main.immediate) {
+        val id = SubscriptionIds.LOCAL
+        val previous = SubscriptionRepository.awaitSnapshot().subscriptions.getValue(id)
+        try {
+            val cancelledOwner = ViewModelStore()
+            val cancelled = GuidedAuthoringViewModel("test.alpha")
+                .also { cancelledOwner.put("guided-cancel", it) }
+            try {
+                withTimeout(5_000) { cancelled.state.first { it.appName != null } }
+                cancelled.startManual()
+                cancelled.addCondition(
+                    GuidedCondition.Text(GuidedTextOperator.Is, "ticket-10-cancel"),
+                )
+                cancelled.setName("Ticket 10 cancel")
+                cancelled.requestSave()
+                // Let the save reach its in-flight write before the session disappears.
+                yield()
+                assertTrue(cancelled.state.value.saving)
+                cancelled.closeSession()
+            } finally {
+                cancelledOwner.clear()
+            }
+            withTimeout(5_000) { cancelled.scope.coroutineContext[Job]!!.join() }
+            assertFalse(cancelled.state.value.saveError)
+            assertFalse(cancelled.saved.value)
+
+            val file = appStorage().subscription.resolve("$id.json")
+            val previousBytes = file.readBytes()
+            check(file.delete() && file.mkdirs())
+            file.resolve("occupied").apply { writeText("blocked") }
+            val failedOwner = ViewModelStore()
+            val failed = GuidedAuthoringViewModel("test.alpha")
+                .also { failedOwner.put("guided-failure", it) }
+            try {
+                withTimeout(5_000) { failed.state.first { it.appName != null } }
+                failed.startManual()
+                failed.addCondition(
+                    GuidedCondition.Text(GuidedTextOperator.Is, "ticket-10-failure"),
+                )
+                failed.setName("Ticket 10 failure")
+                val draft = failed.state.value.draft
+                failed.requestSave()
+                withTimeout(5_000) { failed.state.first { it.saveError } }
+                assertEquals(draft, failed.state.value.draft)
+                assertFalse(failed.saved.value)
+            } finally {
+                failedOwner.clear()
+                file.deleteRecursively()
+                file.writeBytes(previousBytes)
+            }
+        } finally {
+            SubscriptionRepository.update(id) { previous }
+        }
+    }
+
+    // A host that cannot capture for authoring must not advance or fail the authoring session.
+    private suspend fun assertUnsupportedRecordingKeepsSession() =
+        withContext(Dispatchers.Main.immediate) {
+            val previous = GuidedCaptureStore.current.value
+            GuidedCaptureStore.put(
+                GuidedCapture(
+                    snapshot = ComplexSnapshot(
+                        id = 24,
+                        appId = "test.alpha",
+                        activityId = null,
+                        screenHeight = 100,
+                        screenWidth = 100,
+                        isLandscape = false,
+                        appInfo = null,
+                        gkdAppInfo = null,
+                        device = DeviceInfo("test", "test", "test", "test", 0, "test"),
+                        nodes = listOf(testNode(1, 0, text = "OK", clickable = true)),
+                    ),
+                    screenshot = null,
+                    capturedAt = 24,
+                )
+            )
+            val owner = ViewModelStore()
+            val vm = GuidedAuthoringViewModel().also { owner.put("guided-unsupported", it) }
+            try {
+                withTimeout(5_000) { vm.state.first { it.appName != null } }
+                // Android's failed capture path still ends the session on the retry dead end.
+                vm.prepareRecording()
+                vm.adoptRecapturedCapture(PlatformResult.Success(false))
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+
+                vm.adoptRetryCapture(PlatformResult.Unsupported)
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+
+                vm.adoptRecapturedCapture(PlatformResult.Unsupported)
+                assertEquals(GuidedAuthoringPhase.DeadEnd, vm.state.value.phase)
+                assertNull(vm.state.value.recordingFailure)
+            } finally {
+                owner.clear()
+                previous?.let(GuidedCaptureStore::put) ?: GuidedCaptureStore.clear()
+            }
+        }
 
     private suspend fun assertBackupRoundTrip(layout: AppStorageLayout) {
         val repository = SubscriptionRepository

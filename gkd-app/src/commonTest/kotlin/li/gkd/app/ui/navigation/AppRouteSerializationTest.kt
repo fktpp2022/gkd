@@ -20,4 +20,13 @@ class AppRouteSerializationTest {
             Json.decodeFromString<AppRoute>("""{"type":"li.gkd.app.ui.navigation.ActionLogRoute"}""")
         assertEquals(ActionLogRoute(), route)
     }
+
+    @Test
+    fun decodesGuidedRawEditorRouteWithOmittedNoteFlag() {
+        val route =
+            Json.decodeFromString<AppRoute>("""{"type":"li.gkd.app.ui.navigation.UpsertRuleGroupRoute","subsId":-2}""")
+        assertEquals(UpsertRuleGroupRoute(-2), route)
+        val guided: AppRoute = UpsertRuleGroupRoute(-2, guided = true)
+        assertEquals(guided, Json.decodeFromString<AppRoute>(Json.encodeToString(guided)))
+    }
 }
